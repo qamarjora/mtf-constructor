@@ -1,144 +1,169 @@
 /* ============================================================
-   КОНФИГУРАЦИЯ ПРОЕКТА
+   КОНФИГУРАЦИЯ ПРОЕКТА  v1.1
    Здесь меняются справочники и значения по умолчанию.
-   Код трогать не нужно — только данные в этом файле.
    ============================================================ */
 
 window.MTF = window.MTF || {};
 
-MTF.VERSION = '1.0.0';
+MTF.VERSION = '1.1.0';
 
-/* ---------- Значения по умолчанию ---------- */
+/* ---------- Валюты ----------
+   base — валюта расчёта. Все суммы приводятся к ней.
+   Курсы редактируются в интерфейсе.
+------------------------------------------------ */
+MTF.currencies = {
+  KZT: { name: 'Тенге', sign: '₸', rate: 1 },
+  EUR: { name: 'Евро', sign: '€', rate: 520 },
+  USD: { name: 'Доллар', sign: '$', rate: 480 },
+  RUB: { name: 'Рубль', sign: '₽', rate: 5.4 }
+};
+
 MTF.defaults = {
   project: {
     name: 'Сеть молочно-товарных ферм',
     region: '',
     district: '',
     farmsCount: 10,
-    investorsCount: 10,
     operator: '',
-    startYear: 2026,
-    horizon: 10
+    startYear: 2027,
+    horizon: 12,
+    baseCurrency: 'KZT',
+    rateEUR: 520,
+    rateUSD: 480,
+    rateRUB: 5.4
   },
 
   capacity: {
-    cowPlaces: 400,        // коровник, дойные
-    dryPlaces: 72,         // родильно-сухостойный блок
-    calfPlaces: 78,        // телятник (0-2 мес.)
-    heiferPlaces: 0,       // тёлки 3-24 мес.
-    bullPlaces: 0          // бычки на откорме
+    cowPlaces: 400,
+    dryPlaces: 60,
+    calfPlaces: 120,
+    heiferPlaces: 300,
+    bullPlaces: 0,
+    flexHousing: true      // размещать молодняк в свободных местах коровника
   },
 
   herd: {
-    startHeifers: 250,       // нетелей на старте
-    batches: 2,              // партий завоза
-    batchInterval: 1,        // месяцев между партиями
-    firstBatchShare: 40,     // % в первой партии
-    heiferPrice: 800,        // тыс. ₸ за нетель
-    gestationOnArrival: 4,   // месяцев стельности при завозе
+    startHeifers: 455,
+    batches: 2,
+    batchInterval: 1,
+    firstBatchShare: 50,
+    heiferPrice: 2140,       // в валюте heiferCurrency, тыс. единиц
+    heiferCurrency: 'KZT',
+    gestationOnArrival: 5,
     breed: 'Голштинская',
-    source: 'Импорт'
+    source: 'Импорт',
+    restockMode: 'none',     // none | to_capacity — докуп нетелей по годам
+    restockYears: 3
   },
 
   production: {
-    milkYield: 7500,       // л на фуражную корову в год
-    calvingRate: 82,       // телят на 100 коров
-    cullRate: 25,          // выбраковка, % в год
-    calfMortality: 8,      // падёж телят, %
-    heiferMortality: 4,    // падёж молодняка, %
-    dryDays: 60,           // дней сухостоя
-    heiferShare: 50,       // % тёлочек в приплоде
-    breedingAgeMo: 15,     // возраст осеменения, мес.
-    firstCalvingMo: 24,    // возраст первого отёла, мес.
-    remontMode: 'own',     // own | purchase | outsource
-    bullMode: 'sell_calf', // sell_calf | rearing | fatten
-    calfSaleAgeMo: 2,      // возраст продажи телят
-    fattenAgeMo: 16,       // возраст сдачи бычков
-    fattenWeightKg: 450    // живой вес при сдаче
+    yieldMode: 'year',       // year | lactation | daily
+    milkYield: 7500,
+    calvingRate: 78,
+    cullRate: 26,
+    calfMortality: 8,
+    heiferMortality: 4,
+    dryDays: 60,
+    heiferShare: 50,
+    breedingAgeMo: 15,
+    firstCalvingMo: 24,
+    remontMode: 'own',
+    bullMode: 'sell_calf',
+    calfSaleAgeMo: 2,
+    fattenAgeMo: 16,
+    fattenWeightKg: 450
   },
 
   feed: {
-    mode: 'purchase',      // purchase | own
-    dmCow: 20,             // кг сухого вещества на корову в сутки
-    dmHeifer: 7,           // на тёлку
-    dmCalf: 3,             // на телёнка
-    dmBull: 9,             // на бычка
-    dmPriceCow: 75,        // ₸ за кг СВ рациона дойной
-    dmPriceYoung: 55,      // ₸ за кг СВ рациона молодняка
-    landHa: 0,             // га пашни под корма
-    landCostPerHa: 0       // ₸/га себестоимость кормопроизводства
+    mode: 'purchase',        // purchase | own | lump
+    dmCow: 20,
+    dmHeifer: 7,
+    dmCalf: 3,
+    dmBull: 9,
+    dmPriceCow: 90,
+    dmPriceYoung: 60,
+    landMode: 'perHead',     // fixed | perHead
+    landHa: 1000,
+    landHaPerCow: 2.1,
+    landCostPerHa: 220000,
+    lumpAnnual: 0            // фиксированная сумма в год, тыс. ₸
+  },
+
+  staff: {
+    mode: 'detailed',        // detailed | lump
+    lumpAnnual: 0,           // ФОТ одной суммой, тыс. ₸ в год
+    scaleToHerd: false,      // масштабировать штат под фактическое поголовье
+    baseCows: 472            // поголовье, под которое составлено расписание
   },
 
   prices: {
-    milk: 230,             // ₸ за литр
-    calf: 90,              // тыс. ₸ за телёнка
-    cullCow: 450,          // тыс. ₸ за выбракованную корову
-    bullKg: 1900,          // ₸ за кг живого веса
-    surplusHeifer: 800,    // тыс. ₸ за сверхремонтную нетель
-    priceInflation: 6,     // % рост цен реализации в год
-    costInflation: 8       // % рост затрат в год
+    milk: 265,
+    calf: 95,
+    cullCow: 480,
+    bullKg: 1900,
+    priceInflation: 6,
+    costInflation: 8
   },
 
   finance: {
     lender: 'АО «Аграрная кредитная корпорация»',
-    program: 'Жайлау',
-    rate: 6,               // % годовых
-    termYears: 10,
+    program: '',
+    rate: 6,
+    termYears: 12,
     graceYears: 2,
-    financeShareBuild: 85, // % финансирования строительства
-    financeShareEquip: 90, // % финансирования оборудования
-    financeShareHerd: 85,  // % финансирования закупа скота
-    wcLimit: 0,            // лимит оборотного кредита, тыс. ₸ (0 = авто)
-    wcRate: 5,
-    wcTermMonths: 24,
-    wacc: 8,               // ставка дисконтирования, %
-    operatorFeeMode: 'revenue', // revenue | fixed | ebitda
-    operatorFeeValue: 3    // % или тыс. ₸ в год
+    financeShareBuild: 85,
+    financeShareEquip: 90,
+    financeShareHerd: 85,
+    wcAuto: true,            // подбирать оборотный кредит автоматически
+    wcCap: 0,                // лимит оборотного кредита, тыс. ₸ (0 = авто)
+    wcRate: 6,
+    wcTermYears: 5,
+    wacc: 8,
+    operatorFeeMode: 'revenue',
+    operatorFeeValue: 3,
+    capexSpread: [70, 30]    // распределение капзатрат по годам, %
   }
 };
 
 /* ---------- Статьи капитальных затрат ----------
-   unit: 'sum'   — фиксированная сумма (тыс. ₸)
-         'place' — цена за скотоместо × количество мест
-         'head'  — цена за голову × стартовое поголовье
-   group: build | equip | herd | prep — определяет % финансирования
+   unit:  sum | place | head
+   group: prep | build | equip | herd
+   cur:   валюта статьи
 ------------------------------------------------ */
 MTF.capexItems = [
-  { id: 'land',      name: 'Земельный участок',              group: 'prep',  unit: 'sum',   value: 6000 },
-  { id: 'psd',       name: 'Проектирование (ПСД)',           group: 'prep',  unit: 'sum',   value: 45000 },
-  { id: 'expertise', name: 'Вневедомственная экспертиза',     group: 'prep',  unit: 'sum',   value: 12000 },
-  { id: 'geology',   name: 'Геология и топосъёмка',           group: 'prep',  unit: 'sum',   value: 9000 },
-  { id: 'legal',     name: 'Юридическое сопровождение',       group: 'prep',  unit: 'sum',   value: 4000 },
+  { id: 'land',      name: 'Земельный участок',              group: 'prep',  unit: 'sum',   value: 6000,   cur: 'KZT' },
+  { id: 'psd',       name: 'Проектирование (ПСД)',           group: 'prep',  unit: 'sum',   value: 45000,  cur: 'KZT' },
+  { id: 'expertise', name: 'Вневедомственная экспертиза',    group: 'prep',  unit: 'sum',   value: 12000,  cur: 'KZT' },
+  { id: 'geology',   name: 'Геология и топосъёмка',          group: 'prep',  unit: 'sum',   value: 9000,   cur: 'KZT' },
+  { id: 'legal',     name: 'Юридическое сопровождение',      group: 'prep',  unit: 'sum',   value: 4000,   cur: 'KZT' },
 
-  { id: 'barn',      name: 'Коровник с кормовыми столами',    group: 'build', unit: 'place', value: 900, places: 'cowPlaces' },
-  { id: 'dry',       name: 'Родильно-сухостойный блок',       group: 'build', unit: 'place', value: 1100, places: 'dryPlaces' },
-  { id: 'calfhouse', name: 'Телятник',                        group: 'build', unit: 'place', value: 700, places: 'calfPlaces' },
-  { id: 'heiferhouse', name: 'Помещение ремонтного молодняка', group: 'build', unit: 'place', value: 550, places: 'heiferPlaces' },
-  { id: 'bullhouse', name: 'Откормочная площадка',            group: 'build', unit: 'place', value: 400, places: 'bullPlaces' },
-  { id: 'milkblock', name: 'Доильно-молочный блок (здание)',  group: 'build', unit: 'sum',   value: 180000 },
-  { id: 'manure',    name: 'Навозохранилища и площадка',      group: 'build', unit: 'sum',   value: 65000 },
-  { id: 'silage',    name: 'Силосные траншеи и склады',       group: 'build', unit: 'sum',   value: 55000 },
-  { id: 'water',     name: 'Скважина и водоснабжение',        group: 'build', unit: 'sum',   value: 28000 },
-  { id: 'power',     name: 'Электроснабжение, ТП, резерв',    group: 'build', unit: 'sum',   value: 42000 },
-  { id: 'roads',     name: 'Дороги, ограждение, дезбарьер',   group: 'build', unit: 'sum',   value: 22000 },
-  { id: 'admin',     name: 'Административно-бытовой корпус',  group: 'build', unit: 'sum',   value: 35000 },
+  { id: 'barn',      name: 'Коровник с кормовыми столами',   group: 'build', unit: 'place', value: 900,  places: 'cowPlaces',    cur: 'KZT' },
+  { id: 'dry',       name: 'Родильно-сухостойный блок',      group: 'build', unit: 'place', value: 1100, places: 'dryPlaces',    cur: 'KZT' },
+  { id: 'calfhouse', name: 'Телятник',                       group: 'build', unit: 'place', value: 700,  places: 'calfPlaces',   cur: 'KZT' },
+  { id: 'heiferhouse', name: 'Помещение ремонтного молодняка', group: 'build', unit: 'place', value: 550, places: 'heiferPlaces', cur: 'KZT' },
+  { id: 'bullhouse', name: 'Откормочная площадка',           group: 'build', unit: 'place', value: 400,  places: 'bullPlaces',   cur: 'KZT' },
+  { id: 'milkblock', name: 'Доильно-молочный блок (здание)', group: 'build', unit: 'sum',   value: 180000, cur: 'KZT' },
+  { id: 'manure',    name: 'Навозохранилища и площадка',     group: 'build', unit: 'sum',   value: 65000,  cur: 'KZT' },
+  { id: 'silage',    name: 'Силосные траншеи и склады',      group: 'build', unit: 'sum',   value: 55000,  cur: 'KZT' },
+  { id: 'water',     name: 'Скважина и водоснабжение',       group: 'build', unit: 'sum',   value: 28000,  cur: 'KZT' },
+  { id: 'power',     name: 'Электроснабжение, ТП, резерв',   group: 'build', unit: 'sum',   value: 42000,  cur: 'KZT' },
+  { id: 'roads',     name: 'Дороги, ограждение, дезбарьер',  group: 'build', unit: 'sum',   value: 22000,  cur: 'KZT' },
+  { id: 'admin',     name: 'Административно-бытовой корпус', group: 'build', unit: 'sum',   value: 35000,  cur: 'KZT' },
 
-  { id: 'milking',   name: 'Доильная установка «параллель»',  group: 'equip', unit: 'sum',   value: 155000 },
-  { id: 'tanks',     name: 'Танки-охладители',                group: 'equip', unit: 'sum',   value: 48000 },
-  { id: 'manureeq',  name: 'Система навозоудаления',          group: 'equip', unit: 'sum',   value: 32000 },
-  { id: 'mixer',     name: 'Кормораздатчик-миксер',           group: 'equip', unit: 'sum',   value: 38000 },
-  { id: 'tractor',   name: 'Трактор и погрузчик',             group: 'equip', unit: 'sum',   value: 62000 },
-  { id: 'vetequip',  name: 'Ветеринарное оборудование, расколы', group: 'equip', unit: 'sum', value: 18000 },
-  { id: 'software',  name: 'Система управления стадом',       group: 'equip', unit: 'sum',   value: 12000 },
+  { id: 'milking',   name: 'Доильная установка',             group: 'equip', unit: 'sum',   value: 300,  cur: 'EUR' },
+  { id: 'tanks',     name: 'Танки-охладители',               group: 'equip', unit: 'sum',   value: 95,   cur: 'EUR' },
+  { id: 'manureeq',  name: 'Система навозоудаления',         group: 'equip', unit: 'sum',   value: 60,   cur: 'EUR' },
+  { id: 'mixer',     name: 'Кормораздатчик-миксер',          group: 'equip', unit: 'sum',   value: 75,   cur: 'EUR' },
+  { id: 'tractor',   name: 'Трактор и погрузчик',            group: 'equip', unit: 'sum',   value: 62000, cur: 'KZT' },
+  { id: 'vetequip',  name: 'Ветеринарное оборудование',      group: 'equip', unit: 'sum',   value: 18000, cur: 'KZT' },
+  { id: 'software',  name: 'Система управления стадом',      group: 'equip', unit: 'sum',   value: 12000, cur: 'KZT' },
 
-  { id: 'herd',      name: 'Закуп нетелей',                   group: 'herd',  unit: 'head',  value: 800 }
+  { id: 'herd',      name: 'Закуп нетелей',                  group: 'herd',  unit: 'head',  value: 0, cur: 'KZT', auto: true }
 ];
 
-MTF.capexReserve = 7; // % резерв на непредвиденные расходы
+MTF.capexReserve = 7;
 
-/* ---------- Штатное расписание ----------
-   perHead: если задано, количество считается от поголовья
------------------------------------------------- */
+/* ---------- Штатное расписание ---------- */
 MTF.staff = [
   { id: 'director',  name: 'Управляющий фермой',        count: 1,  salary: 900 },
   { id: 'zootech',   name: 'Зоотехник',                 count: 1,  salary: 700 },
@@ -152,13 +177,10 @@ MTF.staff = [
   { id: 'security',  name: 'Охрана',                    count: 4,  salary: 300 }
 ];
 
-MTF.payrollTaxRate = 35; // % начислений на ФОТ (брутто к сумме на руки)
+MTF.payrollTaxRate = 35;
 
-/* ---------- Прочие операционные затраты ----------
-   base: 'head' — на голову в год (тыс. ₸)
-         'cow'  — на фуражную корову в год
-         'sum'  — фиксированная сумма в год
-         'milk' — на литр молока (₸)
+/* ---------- Операционные расходы ----------
+   base: head | cow | sum | milk
 ------------------------------------------------ */
 MTF.opexItems = [
   { id: 'vet',       name: 'Ветеринария и медикаменты',  base: 'head', value: 18 },
@@ -174,8 +196,17 @@ MTF.opexItems = [
 ];
 
 MTF.taxes = {
-  landTax: 800,        // тыс. ₸ в год
-  propertyTaxRate: 0.5,// % от остаточной стоимости
-  cit: 0,              // % КПН (для с/х производителей часто 0 или льгота)
-  depreciationYears: 20 // срок амортизации зданий
+  landTax: 800,
+  propertyTaxRate: 0.5,
+  cit: 0,
+  depreciationYears: 20
+};
+
+/* ---------- Курс валюты ---------- */
+MTF.rate = function (p, cur) {
+  if (!cur || cur === 'KZT') return 1;
+  if (cur === 'EUR') return p.project.rateEUR || 520;
+  if (cur === 'USD') return p.project.rateUSD || 480;
+  if (cur === 'RUB') return p.project.rateRUB || 5.4;
+  return 1;
 };
