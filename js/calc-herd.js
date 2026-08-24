@@ -46,7 +46,13 @@ MTF.calcHerd = function (p) {
   const yieldYear = MTF.annualYield(P);
   const shares = MTF.herdShares(P);
   const mShare = shares.milking;
-  const target = C.cowPlaces + C.dryPlaces;
+  // Проектная мощность ограничена и коровником, и родильно-сухостойным блоком.
+  // Дойных не может быть больше, чем мест в коровнике.
+  const target = Math.min(
+    C.cowPlaces + C.dryPlaces,
+    Math.round(C.cowPlaces / shares.milking),
+    shares.dry + shares.pen > 0 ? Math.round(C.dryPlaces / (shares.dry + shares.pen)) : 1e9
+  );
 
   let cows = 0;
   let firstLact = 0;   // коровы в первой лактации
@@ -237,13 +243,13 @@ MTF.calcHerd = function (p) {
   }
 
   years.meta = {
+    target: target,
     yieldYear: yieldYear,
     milkingShare: mShare,
     dryShare: shares.dry,
     penShare: shares.pen,
     calvingInterval: MTF.calvingInterval(P),
-    purchasedTotal: purchasedTotal,
-    target: target
+    purchasedTotal: purchasedTotal
   };
   return years;
 };
