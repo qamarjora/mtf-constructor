@@ -16,7 +16,7 @@ MTF.docSections = [
 **1.2. Масштаб проекта**
 
 - Количество ферм: {{farmsCount}} единиц
-- Проектная мощность фермы: {{capacityCows}} фуражных коров ({{cowPlaces}} дойных, {{dryPlaces}} сухостойных)
+- Проектная мощность фермы: {{capacityCows}} фуражных коров, в том числе {{cowPlaces}} дойных
 - Совокупная мощность проекта: {{totalCows}} фуражных коров
 - Тип фермы: молочно-товарная, беспривязного содержания
 - Воспроизводство: искусственное осеменение
@@ -210,7 +210,7 @@ MTF.docTables = function (state, res) {
       ['Телятник', f.num(p.capacity.calfPlaces)],
       ['Помещения ремонтного молодняка', f.num(p.capacity.heiferPlaces)],
       ['Откормочная площадка', f.num(p.capacity.bullPlaces)],
-      ['<b>Фуражное поголовье</b>', '<b>' + f.num(p.capacity.cowPlaces + p.capacity.dryPlaces) + '</b>']
+      ['<b>Проектная мощность, фуражных коров</b>', '<b>' + f.num(res.herd.meta.target) + '</b>']
     ]),
     productionTable: dt(['Показатель', 'Значение'], [
       ['Порода', p.herd.breed],
@@ -222,19 +222,25 @@ MTF.docTables = function (state, res) {
       ['Дней сухостоя', f.num(p.production.dryDays)],
       ['Возраст первого отёла, мес.', f.num(p.production.firstCalvingMo)]
     ]),
-    structureTable: dt(['Группа', 'Доля стада', 'Голов при полной мощности'], [
-      ['Дойные коровы', f.pct(res.herd.meta.milkingShare * 100, 0),
-        f.num((p.capacity.cowPlaces + p.capacity.dryPlaces) * res.herd.meta.milkingShare)],
-      ['Сухостойные', f.pct(res.herd.meta.dryShare * 100, 0),
-        f.num((p.capacity.cowPlaces + p.capacity.dryPlaces) * res.herd.meta.dryShare)],
-      ['Родильное отделение', f.pct(res.herd.meta.penShare * 100, 0),
-        f.num((p.capacity.cowPlaces + p.capacity.dryPlaces) * res.herd.meta.penShare)],
-      ['<b>Фуражное поголовье</b>', '<b>100%</b>',
-        '<b>' + f.num(p.capacity.cowPlaces + p.capacity.dryPlaces) + '</b>'],
-      ['Ремонтный молодняк', '—', f.num(lastH.heifers)],
-      ['Телята', '—', f.num(lastH.calves)],
-      ['<b>Общее поголовье</b>', '—', '<b>' + f.num(lastH.total) + '</b>']
-    ]),
+    structureTable: (function () {
+      const P = p.production, tgt = res.herd.meta.target;
+      const M = res.herd.meta;
+      // расчёт шлейфа при выходе на проектную мощность
+      const need = tgt * P.cullRate / 100;
+      const heifersFull = need * (P.firstCalvingMo - P.calfSaleAgeMo) / 12;
+      const bornYear = tgt * P.calvingRate / 100 * (1 - P.calfMortality / 100);
+      const calvesFull = bornYear * P.calfSaleAgeMo / 12;
+      const totalFull = tgt + heifersFull + calvesFull;
+      return dt(['Группа', 'Доля стада', 'Голов при полной мощности'], [
+        ['Дойные коровы', f.pct(M.milkingShare * 100, 0), f.num(tgt * M.milkingShare)],
+        ['Сухостойные', f.pct(M.dryShare * 100, 0), f.num(tgt * M.dryShare)],
+        ['Родильное отделение', f.pct(M.penShare * 100, 0), f.num(tgt * M.penShare)],
+        ['<b>Фуражное поголовье</b>', '<b>100%</b>', '<b>' + f.num(tgt) + '</b>'],
+        ['Ремонтный молодняк', '—', f.num(heifersFull)],
+        ['Телята до ' + P.calfSaleAgeMo + ' мес.', '—', f.num(calvesFull)],
+        ['<b>Общее поголовье</b>', '—', '<b>' + f.num(totalFull) + '</b>']
+      ]);
+    })(),
     herdTable: dt(['Год', 'Фуражное', 'Дойные', 'Молодняк', 'Всего', 'Надой, т'],
       res.herd.map(y => [y.year, f.num(y.cows), f.num(y.milking), f.num(y.heifers),
         f.num(y.total), f.num(y.milkLiters / 1000)])),
@@ -321,7 +327,8 @@ MTF.buildDocData = function (state, res) {
     startYear: p.project.startYear,
     endYear: p.project.startYear + p.project.horizon - 1,
     horizon: p.project.horizon,
-    capacityCows: cc, totalCows: f.num(cc * p.project.farmsCount),
+    capacityCows: f.num(res.herd.meta.target),
+    totalCows: f.num(res.herd.meta.target * p.project.farmsCount),
     cowPlaces: p.capacity.cowPlaces, dryPlaces: p.capacity.dryPlaces,
     startHeifers: p.herd.startHeifers, batches: p.herd.batches,
     remontModeText: MTF.remontModeText[p.production.remontMode],
@@ -359,10 +366,23 @@ function mdLite(t) {
 
 MTF.renderDoc = function (state, res) {
   const data = Object.assign(MTF.buildDocData(state, res), MTF.docTables(state, res));
+  let n = 0;
   return state.docSections.filter(s => s.enabled).map(s => {
     let body = s.body;
     Object.keys(data).forEach(k => { body = body.split('{{' + k + '}}').join(data[k]); });
-    return { title: s.title, body: mdLite(body) };
+    // разделы с номером перенумеровываются подряд, ненумерованные остаются как есть
+    let title = s.title;
+    const m = title.match(/^(\d+)\.\s*(.+)$/);
+    if (m) {
+      n++;
+      const old = m[1];
+      title = n + '. ' + m[2];
+      // подтягиваем номера подпунктов внутри текста: 5.1 → 4.1
+      if (String(n) !== old) {
+        body = body.replace(new RegExp('\\b' + old + '\\.(\\d+)\\.', 'g'), n + '.$1.');
+      }
+    }
+    return { title: title, body: mdLite(body) };
   });
 };
 
