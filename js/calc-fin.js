@@ -188,6 +188,12 @@ MTF.runModel = function (state) {
       ' дней доля дойных составляет ' + Math.round(mShare * 100) + '%. Это ' + Math.round(impliedMilking) +
       ' дойных при ' + p.capacity.cowPlaces + ' местах в коровнике — соотношение мест и параметров не сходится.');
   }
+  const noPrice = state.capexItems.filter(i => i.unit === 'qty' && (!i.value || i.value === 0) && i.qty > 0);
+  if (noPrice.length) {
+    checks.push('Не заполнена цена: ' + noPrice.map(i => i.name).join(', ') +
+      '. Эти позиции в расчёт не попали.');
+  }
+
   const sh = MTF.herdShares(p.production);
   const needDry = (p.capacity.cowPlaces + p.capacity.dryPlaces) * (sh.dry + sh.pen);
   if (needDry > p.capacity.dryPlaces * 1.05) {
