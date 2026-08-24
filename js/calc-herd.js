@@ -11,11 +11,20 @@ MTF.calvingInterval = function (P) {
   return 365 * 100 / Math.max(1, P.calvingRate);
 };
 
-/* Расчётная доля дойных в фуражном поголовье */
-MTF.milkingShare = function (P) {
+/* Доли групп в фуражном поголовье */
+MTF.herdShares = function (P) {
   const interval = MTF.calvingInterval(P);
-  return Math.max(0.5, Math.min(0.95, 1 - P.dryDays / interval));
+  const dry = Math.min(0.4, P.dryDays / interval);
+  const pen = Math.min(0.15, (P.calvingPenDays || 0) / interval);
+  return {
+    dry: dry,
+    pen: pen,
+    milking: Math.max(0.45, 1 - dry - pen)
+  };
 };
+
+/* Расчётная доля дойных в фуражном поголовье */
+MTF.milkingShare = function (P) { return MTF.herdShares(P).milking; };
 
 /* Приведение удоя к годовому на фуражную корову */
 MTF.annualYield = function (P) {
@@ -35,10 +44,12 @@ MTF.calcHerd = function (p) {
   const H = p.herd, P = p.production, C = p.capacity;
   const months = p.project.horizon * 12;
   const yieldYear = MTF.annualYield(P);
-  const mShare = MTF.milkingShare(P);
+  const shares = MTF.herdShares(P);
+  const mShare = shares.milking;
   const target = C.cowPlaces + C.dryPlaces;
 
   let cows = 0;
+  let firstLact = 0;   // коровы в первой лактации
   const pregHeifers = {};
   const heifers = new Array(32).fill(0);
   const bulls = new Array(32).fill(0);
@@ -84,7 +95,8 @@ MTF.calcHerd = function (p) {
     const yIdx = Math.floor((m - 1) / 12);
 
     if (arrivals[m]) {
-      const at = m + Math.max(1, 9 - H.gestationOnArrival);
+      const q = Math.round((P.quarantineDays || 0) / 30);
+      const at = m + Math.max(1, 9 - H.gestationOnArrival) + q;
       pregHeifers[at] = (pregHeifers[at] || 0) + arrivals[m];
       if (m > 12) acc.heifersPurchased += arrivals[m];
     }
@@ -94,13 +106,20 @@ MTF.calcHerd = function (p) {
       const gap = Math.max(0, target - cows);
       const need = Math.round(cows * P.cullRate / 100 + Math.min(gap, target * 0.25));
       if (need > 0) {
-        const at = m + Math.max(1, 9 - H.gestationOnArrival);
+        const q = Math.round((P.quarantineDays || 0) / 30);
+        const at = m + Math.max(1, 9 - H.gestationOnArrival) + q;
         pregHeifers[at] = (pregHeifers[at] || 0) + need;
         acc.heifersPurchased += need;
       }
     }
 
-    if (pregHeifers[m]) { cows += pregHeifers[m]; acc.calvings += pregHeifers[m]; delete pregHeifers[m]; }
+    if (pregHeifers[m]) {
+      cows += pregHeifers[m]; firstLact += pregHeifers[m];
+      acc.calvings += pregHeifers[m]; delete pregHeifers[m];
+    }
+    // первотёлка переходит во взрослое стадо через межотёльный период
+    const graduate = firstLact / (MTF.calvingInterval(P) / 30);
+    firstLact = Math.max(0, firstLact - graduate);
 
     const calvings = cows * (P.calvingRate / 100) / 12;
     acc.calvings += calvings;
@@ -112,6 +131,7 @@ MTF.calcHerd = function (p) {
     bulls[0] += born - females;
 
     const culled = cows * (P.cullRate / 100) / 12;
+    firstLact = Math.max(0, firstLact - firstLact * (P.cullRate / 100) / 12);
     cows -= culled;
     acc.cullSold += culled;
 
@@ -139,7 +159,7 @@ MTF.calcHerd = function (p) {
     if (P.remontMode === 'own' && heifers[fc] > 0) {
       const room = Math.max(0, target - cows);
       const enter = Math.min(heifers[fc], Math.max(0, room));
-      cows += enter;
+      cows += enter; firstLact += enter;
       acc.calvings += enter;
       acc.surplusSold += heifers[fc] - enter;
       heifers[fc] = 0;
@@ -157,19 +177,22 @@ MTF.calcHerd = function (p) {
       }
     }
 
-    acc.milkLiters += cows * yieldYear / 12;
+    const fcK = (P.firstCalfYield || 100) / 100;
+    const effCows = (cows - firstLact) + firstLact * fcK;
+    acc.milkLiters += effCows * yieldYear / 12;
 
     // ----- Контроль скотомест -----
     const heiferTotal = heifers.slice(saleAge + 1).reduce((a, b) => a + b, 0);
     const calfTotal = heifers.slice(0, saleAge + 1).reduce((a, b) => a + b, 0) +
                       bulls.slice(0, saleAge + 1).reduce((a, b) => a + b, 0);
     const bullTotal = bulls.slice(saleAge + 1).reduce((a, b) => a + b, 0);
-    const dry = cows * (1 - mShare);
-    const milking = cows - dry;
+    const dry = cows * shares.dry;
+    const pen = cows * shares.pen;
+    const milking = cows - dry - pen;
 
     // свободные места коровника, доступные под молодняк
     const freeCow = C.flexHousing ? Math.max(0, C.cowPlaces - milking) : 0;
-    const freeDry = C.flexHousing ? Math.max(0, C.dryPlaces - dry) : 0;
+    const freeDry = C.flexHousing ? Math.max(0, C.dryPlaces - dry - pen) : 0;
     let flexPool = freeCow + freeDry;
 
     function over(cur, cap, label, coef) {
@@ -185,7 +208,9 @@ MTF.calcHerd = function (p) {
     }
 
     if (milking > C.cowPlaces * 1.02) warn(acc, 'Дойные: ' + Math.round(milking) + ' при ' + C.cowPlaces + ' местах');
-    if (dry > C.dryPlaces * 1.02) warn(acc, 'Сухостой: ' + Math.round(dry) + ' при ' + C.dryPlaces + ' местах');
+    if (dry + pen > C.dryPlaces * 1.02)
+      warn(acc, 'Родильно-сухостойный блок: ' + Math.round(dry + pen) +
+        ' (сухостой ' + Math.round(dry) + ' + родилка ' + Math.round(pen) + ') при ' + C.dryPlaces + ' местах');
     over(calfTotal, C.calfPlaces, 'Телята', 0.5);
     over(heiferTotal, C.heiferPlaces, 'Ремонтный молодняк', 1);
     over(bullTotal, C.bullPlaces, 'Бычки', 1);
@@ -193,7 +218,7 @@ MTF.calcHerd = function (p) {
     if (m % 12 === 0) {
       years.push({
         year: p.project.startYear + yIdx, idx: yIdx,
-        cows: cows, milking: milking, dry: dry,
+        cows: cows, milking: milking, dry: dry, pen: pen, firstLact: firstLact,
         calves: calfTotal, heifers: heiferTotal, bulls: bullTotal,
         total: cows + calfTotal + heiferTotal + bullTotal,
         milkLiters: acc.milkLiters,
@@ -214,6 +239,8 @@ MTF.calcHerd = function (p) {
   years.meta = {
     yieldYear: yieldYear,
     milkingShare: mShare,
+    dryShare: shares.dry,
+    penShare: shares.pen,
     calvingInterval: MTF.calvingInterval(P),
     purchasedTotal: purchasedTotal,
     target: target
