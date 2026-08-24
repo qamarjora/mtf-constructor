@@ -67,7 +67,10 @@ MTF.calcFeed = function (p, y) {
   }
   const d = 365;
   let s = 0;
-  s += y.cows * F.dmCow * d * F.dmPriceCow / 1000;
+  const dryHead = (y.dry || 0) + (y.pen || 0);
+  const milkHead = Math.max(0, y.cows - dryHead);
+  s += milkHead * F.dmCow * d * F.dmPriceCow / 1000;
+  s += dryHead * (F.dmDry || F.dmCow) * d * F.dmPriceCow / 1000;
   s += y.heifers * F.dmHeifer * d * F.dmPriceYoung / 1000;
   s += y.calves * F.dmCalf * d * F.dmPriceYoung / 1000;
   s += y.bulls * F.dmBull * d * F.dmPriceYoung / 1000;
@@ -96,6 +99,12 @@ MTF.calcOpex = function (p, herdYears, staff, opexItems) {
       else if (it.base === 'milk') v = it.value * y.milkLiters / 1000;
       if (v > 0) detail[it.name] = v * k;
     });
+
+    const qHeads = (i === 0 ? p.herd.startHeifers : 0) + y.heifersPurchased;
+    if (qHeads > 0 && p.production.quarantineDays > 0) {
+      detail['Карантин завозного поголовья'] =
+        qHeads * MTF.quarantineCostPerHead * (p.production.quarantineDays / 30) * k;
+    }
 
     if (y.heifersPurchased > 0) {
       detail['Приобретение нетелей'] =
