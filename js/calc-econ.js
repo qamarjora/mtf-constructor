@@ -22,15 +22,23 @@ MTF.calcCapex = function (p, items) {
       sum = it.value * k * (p.capacity[it.places] || 0);
     } else if (it.unit === 'head') {
       sum = it.value * k * p.herd.startHeifers;
+    } else if (it.unit === 'qty') {
+      // value — цена за единицу в валюте статьи, не в тысячах
+      sum = it.value * (it.qty || 0) * k / 1000;
     }
     if (sum > 0) {
-      rows.push({ id: it.id, name: it.name, group: it.group, sum: sum, cur: it.cur, native: it.value });
+      rows.push({ id: it.id, name: it.name, group: it.group, sum: sum,
+        cur: it.id === 'herd' && it.auto ? p.herd.heiferCurrency : it.cur,
+        native: it.id === 'herd' && it.auto ? p.herd.heiferPrice : it.value,
+        qty: it.id === 'herd' && it.auto ? p.herd.startHeifers : it.qty,
+        unit: it.unit });
       groups[it.group] += sum;
     }
   });
 
   const subtotal = groups.prep + groups.build + groups.equip + groups.herd;
-  const reserve = subtotal * MTF.capexReserve / 100;
+  // резерв начисляется на строительство и оборудование; скот идёт по цене контракта
+  const reserve = (groups.build + groups.equip) * MTF.capexReserve / 100;
   groups.build += reserve;
 
   return { rows: rows, groups: groups, reserve: reserve, total: subtotal + reserve };
