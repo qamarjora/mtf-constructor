@@ -181,13 +181,6 @@ MTF.runModel = function (state) {
 
   // Проверки согласованности вводных
   const checks = [];
-  const mShare = herd.meta.milkingShare;
-  const impliedMilking = (p.capacity.cowPlaces + p.capacity.dryPlaces) * mShare;
-  if (Math.abs(impliedMilking - p.capacity.cowPlaces) / Math.max(1, p.capacity.cowPlaces) > 0.08) {
-    checks.push('При выходе телят ' + p.production.calvingRate + ' и сухостое ' + p.production.dryDays +
-      ' дней доля дойных составляет ' + Math.round(mShare * 100) + '%. Это ' + Math.round(impliedMilking) +
-      ' дойных при ' + p.capacity.cowPlaces + ' местах в коровнике — соотношение мест и параметров не сходится.');
-  }
   const noPrice = state.capexItems.filter(i => i.unit === 'qty' && (!i.value || i.value === 0) && i.qty > 0);
   if (noPrice.length) {
     checks.push('Не заполнена цена: ' + noPrice.map(i => i.name).join(', ') +
@@ -195,11 +188,11 @@ MTF.runModel = function (state) {
   }
 
   const sh = MTF.herdShares(p.production);
-  const needDry = (p.capacity.cowPlaces + p.capacity.dryPlaces) * (sh.dry + sh.pen);
+  const tgt = herd.meta.target;
+  const needDry = tgt * (sh.dry + sh.pen);
   if (needDry > p.capacity.dryPlaces * 1.05) {
     checks.push('Родильно-сухостойному блоку нужно ' + Math.round(needDry) + ' мест (сухостой ' +
-      Math.round((p.capacity.cowPlaces + p.capacity.dryPlaces) * sh.dry) + ' + родилка ' +
-      Math.round((p.capacity.cowPlaces + p.capacity.dryPlaces) * sh.pen) + '), а заложено ' +
+      Math.round(tgt * sh.dry) + ' + родилка ' + Math.round(tgt * sh.pen) + '), а заложено ' +
       p.capacity.dryPlaces + '. Расширьте блок или сократите сухостой.');
   }
   if (p.herd.heiferPrice > 100000 && p.herd.heiferCurrency === 'KZT') {
