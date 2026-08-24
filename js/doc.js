@@ -104,23 +104,27 @@ MTF.docSections = [
 
 {{metricsTable}}
 
-**5.2. Структура финансирования**
+**5.2. Капитальные затраты**
+
+{{capexTable}}
+
+**5.3. Структура финансирования**
 
 {{fundingTable}}
 
-**5.3. Прогноз финансовых показателей**
+**5.4. Прогноз финансовых показателей**
 
 {{pnlTable}}
 
-**5.4. График погашения**
+**5.5. График погашения**
 
 {{debtTable}}
 
-**5.5. Доходность на вложения инвестора**
+**5.6. Доходность на вложения инвестора**
 
 {{exitTable}}
 
-**5.6. Государственная поддержка**
+**5.7. Государственная поддержка**
 
 {{subsidyTable}}`
   },
@@ -247,6 +251,24 @@ MTF.docTables = function (state, res) {
       ['Дисконтированная окупаемость', 'лет', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—'],
       ['Минимальный DSCR', '', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—']
     ]),
+    capexTable: (function () {
+      const gname = { prep: 'Подготовительные расходы', build: 'Строительство',
+                      equip: 'Оборудование и техника', herd: 'Закуп поголовья' };
+      const rows = [];
+      ['prep', 'build', 'herd'].forEach(g => {
+        res.capex.rows.filter(r => r.group === g).forEach(r => {
+          rows.push([r.name, f.num(r.sum)]);
+        });
+      });
+      const eq = res.capex.rows.filter(r => r.group === 'equip');
+      if (eq.length) {
+        rows.push([gname.equip + ' (' + eq.length + ' позиций)',
+          f.num(eq.reduce((a, r) => a + r.sum, 0))]);
+      }
+      if (res.capex.reserve > 0) rows.push(['Резерв на непредвиденные расходы', f.num(res.capex.reserve)]);
+      rows.push(['<b>Итого капитальные затраты</b>', '<b>' + f.num(res.capex.total) + '</b>']);
+      return dt(['Статья', 'Сумма, тыс. ₸'], rows);
+    })(),
     fundingTable: dt(['Статья', 'Сумма, тыс. ₸', 'Доля'], [
       ['Подготовительные расходы', f.num(res.capex.groups.prep), f.pct(res.capex.groups.prep / res.capex.total * 100, 1)],
       ['Строительство', f.num(res.capex.groups.build), f.pct(res.capex.groups.build / res.capex.total * 100, 1)],
