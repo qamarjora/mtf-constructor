@@ -35,7 +35,7 @@ MTF.defaults = {
 
   capacity: {
     cowPlaces: 400,
-    dryPlaces: 60,
+    dryPlaces: 75,
     calfPlaces: 120,
     heiferPlaces: 300,
     bullPlaces: 0,
@@ -43,7 +43,7 @@ MTF.defaults = {
   },
 
   herd: {
-    startHeifers: 455,
+    startHeifers: 470,
     batches: 2,
     batchInterval: 1,
     firstBatchShare: 50,
@@ -58,12 +58,16 @@ MTF.defaults = {
 
   production: {
     yieldMode: 'year',       // year | lactation | daily
-    milkYield: 7500,
+    milkYield: 8000,
     calvingRate: 78,
     cullRate: 26,
     calfMortality: 8,
     heiferMortality: 4,
     dryDays: 60,
+    calvingPenDays: 14,      // дней в родильном отделении (до и после отёла)
+    quarantineDays: 30,      // карантин завозного поголовья
+    quarantineInBarn: true,  // карантин в свободном коровнике (только первый завоз)
+    firstCalfYield: 85,      // удой первотёлки, % от взрослой коровы
     heiferShare: 50,
     breedingAgeMo: 15,
     firstCalvingMo: 24,
@@ -77,6 +81,7 @@ MTF.defaults = {
   feed: {
     mode: 'purchase',        // purchase | own | lump
     dmCow: 20,
+    dmDry: 13,
     dmHeifer: 7,
     dmCalf: 3,
     dmBull: 9,
@@ -194,6 +199,9 @@ MTF.opexItems = [
   { id: 'admin',     name: 'Административные расходы',   base: 'sum',  value: 14000 },
   { id: 'transport', name: 'Транспортировка молока',     base: 'milk', value: 4 }
 ];
+
+/* Затраты на карантин: тыс. ₸ на голову единовременно */
+MTF.quarantineCostPerHead = 45;
 
 MTF.taxes = {
   landTax: 800,
