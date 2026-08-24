@@ -266,6 +266,9 @@ MTF.renderEcon = function (res) {
   const f = MTF.fmt, cap = res.capex, P = MTF.state.params;
 
   const gname = { prep: 'Подготовка', build: 'Строительство', equip: 'Оборудование', herd: 'Поголовье' };
+  const dcur = MTF.dispCur(P), dsign = MTF.dispSign(P);
+  const dd = dcur === 'KZT' ? 0 : 1;
+  const dunit = dcur === 'KZT' ? 'тыс. ₸' : 'тыс. ' + dsign;
 
   const capexRows = MTF.state.capexItems.map((it, i) => {
     const row = cap.rows.find(r => r.id === it.id);
@@ -287,7 +290,7 @@ MTF.renderEcon = function (res) {
       '<td><select data-cxc="' + i + '"' + (isAuto ? ' disabled' : '') + ' class="cursel">' +
         Object.keys(MTF.currencies).map(c =>
         '<option value="' + c + '"' + (c === curVal ? ' selected' : '') + '>' + MTF.currencies[c].sign + '</option>').join('') + '</select></td>' +
-      '<td class="n">' + f.num(sum) + '</td>' +
+      '<td class="n">' + f.num(MTF.disp(P, sum), dd) + '</td>' +
       '<td>' + (isAuto ? '<span class="hint" style="margin:0">авто</span>' :
         '<button class="del" data-cxdel="' + i + '">×</button>') + '</td></tr>';
   }).join('');
@@ -295,7 +298,7 @@ MTF.renderEcon = function (res) {
   const groupTotals = ['prep', 'build', 'equip', 'herd']
     .filter(g => cap.groups[g] > 0)
     .map(g => '<tr class="sub"><td>' + gname[g] + ' — подытог</td><td></td><td></td><td></td><td></td><td></td>' +
-      '<td class="n">' + f.num(cap.groups[g]) + '</td><td></td></tr>').join('');
+      '<td class="n">' + f.num(MTF.disp(P, cap.groups[g]), dd) + '</td><td></td></tr>').join('');
 
   const staffBlock = P.staff.mode === 'lump'
     ? field('ФОТ с начислениями в год', 'staff.lumpAnnual', 'т.₸') +
@@ -342,8 +345,14 @@ MTF.renderEcon = function (res) {
     '<td><input type="number" data-oxv="' + i + '" value="' + it.value + '" step="any" style="width:82px"></td>' +
     '<td><button class="del" data-oxdel="' + i + '">×</button></td></tr>').join('');
 
-  return '<div class="card"><h3>Капитальные затраты</h3><div class="tw"><table>' +
-    '<thead><tr><th>Статья</th><th>Группа</th><th>Тип</th><th>Цена</th><th>Кол-во</th><th>Вал.</th><th>Итого, т.₸</th><th></th></tr></thead><tbody>' +
+  return '<div class="card"><h3>Капитальные затраты</h3>' +
+    '<div class="f wide" style="margin-bottom:14px"><label>Валюта отображения итогов</label>' +
+    '<select data-p="project.displayCurrency">' +
+    Object.keys(MTF.currencies).map(c => '<option value="' + c + '"' +
+      (c === dcur ? ' selected' : '') + '>' + MTF.currencies[c].name + ' ' + MTF.currencies[c].sign +
+      '</option>').join('') + '</select></div>' +
+    '<div class="tw"><table>' +
+    '<thead><tr><th>Статья</th><th>Группа</th><th>Тип</th><th>Цена</th><th>Кол-во</th><th>Вал.</th><th>Итого, ' + dunit + '</th><th></th></tr></thead><tbody>' +
     capexRows +
     '<tr class="sub"><td>Резерв ' + MTF.capexReserve + '%</td><td colspan="5"></td><td class="n">' + f.num(cap.reserve) + '</td><td></td></tr>' +
     '<tr class="tot"><td>Итого</td><td colspan="5"></td><td class="n">' + f.num(cap.total) + '</td><td></td></tr>' +
