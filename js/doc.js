@@ -44,11 +44,25 @@ MTF.docSections = [
 
 {{productionTable}}
 
-**2.3. Воспроизводство**
+**2.3. Производственный цикл**
 
-Воспроизводство стада осуществляется методом искусственного осеменения. Ремонт стада — {{remontModeText}}. Реализация бычков — {{bullModeText}}.
+Движение поголовья по зонам комплекса:
 
-**2.4. Динамика стада**
+- Завозное поголовье проходит карантин продолжительностью {{quarantineDays}} дней
+- Дойные коровы содержатся в коровнике, осеменение проводится в зоне доильно-молочного блока
+- За {{dryDays}} дней до отёла корова переводится в родильно-сухостойный блок
+- Отёл и последующие {{calvingPenDays}} дней — родильное отделение
+- После отёла корова возвращается в дойное стадо, телёнок переводится в телятник
+- В возрасте {{calfSaleAge}} мес. телята переводятся из телятника: тёлочки — в группу ремонтного молодняка, бычки — на реализацию
+- Ремонтные тёлки содержатся до возраста первого отёла ({{firstCalvingMo}} мес.), после чего вводятся в основное стадо
+
+Воспроизводство осуществляется методом искусственного осеменения. Ремонт стада — {{remontModeText}}. Реализация бычков — {{bullModeText}}.
+
+**2.4. Расчётная структура стада**
+
+{{structureTable}}
+
+**2.5. Динамика стада**
 
 {{herdTable}}`
   },
@@ -204,6 +218,19 @@ MTF.docTables = function (state, res) {
       ['Дней сухостоя', f.num(p.production.dryDays)],
       ['Возраст первого отёла, мес.', f.num(p.production.firstCalvingMo)]
     ]),
+    structureTable: dt(['Группа', 'Доля стада', 'Голов при полной мощности'], [
+      ['Дойные коровы', f.pct(res.herd.meta.milkingShare * 100, 0),
+        f.num((p.capacity.cowPlaces + p.capacity.dryPlaces) * res.herd.meta.milkingShare)],
+      ['Сухостойные', f.pct(res.herd.meta.dryShare * 100, 0),
+        f.num((p.capacity.cowPlaces + p.capacity.dryPlaces) * res.herd.meta.dryShare)],
+      ['Родильное отделение', f.pct(res.herd.meta.penShare * 100, 0),
+        f.num((p.capacity.cowPlaces + p.capacity.dryPlaces) * res.herd.meta.penShare)],
+      ['<b>Фуражное поголовье</b>', '<b>100%</b>',
+        '<b>' + f.num(p.capacity.cowPlaces + p.capacity.dryPlaces) + '</b>'],
+      ['Ремонтный молодняк', '—', f.num(lastH.heifers)],
+      ['Телята', '—', f.num(lastH.calves)],
+      ['<b>Общее поголовье</b>', '—', '<b>' + f.num(lastH.total) + '</b>']
+    ]),
     herdTable: dt(['Год', 'Фуражное', 'Дойные', 'Молодняк', 'Всего', 'Надой, т'],
       res.herd.map(y => [y.year, f.num(y.cows), f.num(y.milking), f.num(y.heifers),
         f.num(y.total), f.num(y.milkLiters / 1000)])),
@@ -275,7 +302,12 @@ MTF.buildDocData = function (state, res) {
     startHeifers: p.herd.startHeifers, batches: p.herd.batches,
     remontModeText: MTF.remontModeText[p.production.remontMode],
     bullModeText: MTF.bullModeText[p.production.bullMode],
-    operatorFeeText: feeText
+    operatorFeeText: feeText,
+    quarantineDays: p.production.quarantineDays,
+    dryDays: p.production.dryDays,
+    calvingPenDays: p.production.calvingPenDays,
+    calfSaleAge: p.production.calfSaleAgeMo,
+    firstCalvingMo: p.production.firstCalvingMo
   };
 };
 
