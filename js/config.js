@@ -28,6 +28,7 @@ MTF.defaults = {
     startYear: 2027,
     horizon: 12,
     baseCurrency: 'KZT',
+    displayCurrency: 'EUR',   // валюта отображения сумм в разделе капзатрат
     rateEUR: 520,
     rateUSD: 480,
     rateRUB: 5.4
@@ -136,25 +137,6 @@ MTF.defaults = {
    cur:   валюта статьи
 ------------------------------------------------ */
 MTF.capexItems = [
-  { id: 'land',      name: 'Земельный участок',              group: 'prep',  unit: 'sum',   value: 6000,   cur: 'KZT' },
-  { id: 'psd',       name: 'Проектирование (ПСД)',           group: 'prep',  unit: 'sum',   value: 45000,  cur: 'KZT' },
-  { id: 'expertise', name: 'Вневедомственная экспертиза',    group: 'prep',  unit: 'sum',   value: 12000,  cur: 'KZT' },
-  { id: 'geology',   name: 'Геология и топосъёмка',          group: 'prep',  unit: 'sum',   value: 9000,   cur: 'KZT' },
-  { id: 'legal',     name: 'Юридическое сопровождение',      group: 'prep',  unit: 'sum',   value: 4000,   cur: 'KZT' },
-
-  { id: 'barn',      name: 'Коровник с кормовыми столами',   group: 'build', unit: 'place', value: 900,  places: 'cowPlaces',    cur: 'KZT' },
-  { id: 'dry',       name: 'Родильно-сухостойный блок',      group: 'build', unit: 'place', value: 1100, places: 'dryPlaces',    cur: 'KZT' },
-  { id: 'calfhouse', name: 'Телятник',                       group: 'build', unit: 'place', value: 700,  places: 'calfPlaces',   cur: 'KZT' },
-  { id: 'heiferhouse', name: 'Помещение ремонтного молодняка', group: 'build', unit: 'place', value: 550, places: 'heiferPlaces', cur: 'KZT' },
-  { id: 'bullhouse', name: 'Откормочная площадка',           group: 'build', unit: 'place', value: 400,  places: 'bullPlaces',   cur: 'KZT' },
-  { id: 'milkblock', name: 'Доильно-молочный блок (здание)', group: 'build', unit: 'sum',   value: 180000, cur: 'KZT' },
-  { id: 'manure',    name: 'Навозохранилища и площадка',     group: 'build', unit: 'sum',   value: 65000,  cur: 'KZT' },
-  { id: 'silage',    name: 'Силосные траншеи и склады',      group: 'build', unit: 'sum',   value: 55000,  cur: 'KZT' },
-  { id: 'water',     name: 'Скважина и водоснабжение',       group: 'build', unit: 'sum',   value: 28000,  cur: 'KZT' },
-  { id: 'power',     name: 'Электроснабжение, ТП, резерв',   group: 'build', unit: 'sum',   value: 42000,  cur: 'KZT' },
-  { id: 'roads',     name: 'Дороги, ограждение, дезбарьер',  group: 'build', unit: 'sum',   value: 22000,  cur: 'KZT' },
-  { id: 'admin',     name: 'Административно-бытовой корпус', group: 'build', unit: 'sum',   value: 35000,  cur: 'KZT' },
-
   /* --- Оборудование доильно-молочного блока --- */
   { id: 'e_parallel', name: 'Доильная установка «Параллель», комплект', group: 'equip', unit: 'qty', value: 252000, qty: 1, cur: 'EUR' },
   { id: 'e_fan5_dmb', name: 'Вентилятор горизонтальный Ø5 м (ДМБ)',    group: 'equip', unit: 'qty', value: 3606.6, qty: 3, cur: 'EUR' },
@@ -222,18 +204,7 @@ MTF.payrollTaxRate = 35;
 /* ---------- Операционные расходы ----------
    base: head | cow | sum | milk
 ------------------------------------------------ */
-MTF.opexItems = [
-  { id: 'vet',       name: 'Ветеринария и медикаменты',  base: 'head', value: 18 },
-  { id: 'semen',     name: 'Семя и осеменение',          base: 'cow',  value: 22 },
-  { id: 'energy',    name: 'Электроэнергия и вода',      base: 'cow',  value: 28 },
-  { id: 'fuel',      name: 'ГСМ',                        base: 'cow',  value: 24 },
-  { id: 'repair',    name: 'Ремонт и обслуживание',      base: 'sum',  value: 18000 },
-  { id: 'insurance', name: 'Страхование',                base: 'sum',  value: 9000 },
-  { id: 'bedding',   name: 'Подстилка и расходники',     base: 'head', value: 9 },
-  { id: 'lab',       name: 'Лабораторные исследования',  base: 'milk', value: 1.2 },
-  { id: 'admin',     name: 'Административные расходы',   base: 'sum',  value: 14000 },
-  { id: 'transport', name: 'Транспортировка молока',     base: 'milk', value: 4 }
-];
+MTF.opexItems = [];
 
 /* Затраты на карантин: тыс. ₸ на голову единовременно */
 MTF.quarantineCostPerHead = 45;
@@ -252,4 +223,21 @@ MTF.rate = function (p, cur) {
   if (cur === 'USD') return p.project.rateUSD || 480;
   if (cur === 'RUB') return p.project.rateRUB || 5.4;
   return 1;
+};
+
+/* ---------- Отображение сумм в выбранной валюте ----------
+   Все расчёты ведутся в тысячах тенге. Эти функции переводят
+   итоги в валюту отображения только для показа.
+------------------------------------------------ */
+MTF.dispCur = function (p) {
+  return (p.project && p.project.displayCurrency) || 'KZT';
+};
+MTF.dispSign = function (p) {
+  const c = MTF.dispCur(p);
+  return (MTF.currencies[c] || MTF.currencies.KZT).sign;
+};
+MTF.disp = function (p, kzt) {
+  const c = MTF.dispCur(p);
+  if (c === 'KZT') return kzt;
+  return kzt / MTF.rate(p, c);
 };
