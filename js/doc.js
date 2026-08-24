@@ -252,22 +252,24 @@ MTF.docTables = function (state, res) {
       ['Минимальный DSCR', '', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—']
     ]),
     capexTable: (function () {
+      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
+      const D = v => f.num(MTF.disp(p, v), dd);
       const gname = { prep: 'Подготовительные расходы', build: 'Строительство',
                       equip: 'Оборудование и техника', herd: 'Закуп поголовья' };
       const rows = [];
       ['prep', 'build', 'herd'].forEach(g => {
         res.capex.rows.filter(r => r.group === g).forEach(r => {
-          rows.push([r.name, f.num(r.sum)]);
+          rows.push([r.name, D(r.sum)]);
         });
       });
       const eq = res.capex.rows.filter(r => r.group === 'equip');
       if (eq.length) {
         rows.push([gname.equip + ' (' + eq.length + ' позиций)',
-          f.num(eq.reduce((a, r) => a + r.sum, 0))]);
+          D(eq.reduce((a, r) => a + r.sum, 0))]);
       }
-      if (res.capex.reserve > 0) rows.push(['Резерв на непредвиденные расходы', f.num(res.capex.reserve)]);
-      rows.push(['<b>Итого капитальные затраты</b>', '<b>' + f.num(res.capex.total) + '</b>']);
-      return dt(['Статья', 'Сумма, тыс. ₸'], rows);
+      if (res.capex.reserve > 0) rows.push(['Резерв на непредвиденные расходы', D(res.capex.reserve)]);
+      rows.push(['<b>Итого капитальные затраты</b>', '<b>' + D(res.capex.total) + '</b>']);
+      return dt(['Статья', 'Сумма, тыс. ' + dsg], rows);
     })(),
     fundingTable: dt(['Статья', 'Сумма, тыс. ₸', 'Доля'], [
       ['Подготовительные расходы', f.num(res.capex.groups.prep), f.pct(res.capex.groups.prep / res.capex.total * 100, 1)],
