@@ -188,6 +188,14 @@ MTF.runModel = function (state) {
       ' дней доля дойных составляет ' + Math.round(mShare * 100) + '%. Это ' + Math.round(impliedMilking) +
       ' дойных при ' + p.capacity.cowPlaces + ' местах в коровнике — соотношение мест и параметров не сходится.');
   }
+  const sh = MTF.herdShares(p.production);
+  const needDry = (p.capacity.cowPlaces + p.capacity.dryPlaces) * (sh.dry + sh.pen);
+  if (needDry > p.capacity.dryPlaces * 1.05) {
+    checks.push('Родильно-сухостойному блоку нужно ' + Math.round(needDry) + ' мест (сухостой ' +
+      Math.round((p.capacity.cowPlaces + p.capacity.dryPlaces) * sh.dry) + ' + родилка ' +
+      Math.round((p.capacity.cowPlaces + p.capacity.dryPlaces) * sh.pen) + '), а заложено ' +
+      p.capacity.dryPlaces + '. Расширьте блок или сократите сухостой.');
+  }
   if (p.herd.heiferPrice > 100000 && p.herd.heiferCurrency === 'KZT') {
     checks.push('Цена нетели ' + Math.round(p.herd.heiferPrice) + ' тыс. ₸ выглядит завышенной. ' +
       'Поле в тысячах: 2 140 000 ₸ вводится как 2140.');
