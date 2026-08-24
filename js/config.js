@@ -131,7 +131,7 @@ MTF.defaults = {
 };
 
 /* ---------- Статьи капитальных затрат ----------
-   unit:  sum | place | head
+   unit:  sum | place | head | qty (цена за единицу × количество)
    group: prep | build | equip | herd
    cur:   валюта статьи
 ------------------------------------------------ */
@@ -155,13 +155,48 @@ MTF.capexItems = [
   { id: 'roads',     name: 'Дороги, ограждение, дезбарьер',  group: 'build', unit: 'sum',   value: 22000,  cur: 'KZT' },
   { id: 'admin',     name: 'Административно-бытовой корпус', group: 'build', unit: 'sum',   value: 35000,  cur: 'KZT' },
 
-  { id: 'milking',   name: 'Доильная установка',             group: 'equip', unit: 'sum',   value: 300,  cur: 'EUR' },
-  { id: 'tanks',     name: 'Танки-охладители',               group: 'equip', unit: 'sum',   value: 95,   cur: 'EUR' },
-  { id: 'manureeq',  name: 'Система навозоудаления',         group: 'equip', unit: 'sum',   value: 60,   cur: 'EUR' },
-  { id: 'mixer',     name: 'Кормораздатчик-миксер',          group: 'equip', unit: 'sum',   value: 75,   cur: 'EUR' },
-  { id: 'tractor',   name: 'Трактор и погрузчик',            group: 'equip', unit: 'sum',   value: 62000, cur: 'KZT' },
-  { id: 'vetequip',  name: 'Ветеринарное оборудование',      group: 'equip', unit: 'sum',   value: 18000, cur: 'KZT' },
-  { id: 'software',  name: 'Система управления стадом',      group: 'equip', unit: 'sum',   value: 12000, cur: 'KZT' },
+  /* --- Оборудование доильно-молочного блока --- */
+  { id: 'e_parallel', name: 'Доильная установка «Параллель», комплект', group: 'equip', unit: 'qty', value: 252000, qty: 1, cur: 'EUR' },
+  { id: 'e_fan5_dmb', name: 'Вентилятор горизонтальный Ø5 м (ДМБ)',    group: 'equip', unit: 'qty', value: 3606.6, qty: 3, cur: 'EUR' },
+  { id: 'e_fan7_dmb', name: 'Вентилятор горизонтальный Ø7 м (ДМБ)',    group: 'equip', unit: 'qty', value: 3606.6, qty: 1, cur: 'EUR' },
+  { id: 'e_fence_dmb', name: 'Разделительные заборы и калитки (ДМБ), пм', group: 'equip', unit: 'qty', value: 89.6, qty: 300, cur: 'EUR' },
+  { id: 'e_mats_dmb', name: 'Рулонные маты (ДМБ), пм',                  group: 'equip', unit: 'qty', value: 80, qty: 150, cur: 'EUR' },
+
+  /* --- Оборудование коровника --- */
+  { id: 'e_mattress', name: 'Матрас 4-слойный 5,5 см',                  group: 'equip', unit: 'qty', value: 125, qty: 472, cur: 'EUR' },
+  { id: 'e_stall',    name: 'Стойловое оборудование',                   group: 'equip', unit: 'qty', value: 100, qty: 550, cur: 'EUR' },
+  { id: 'e_drink',    name: 'Поилки нержавеющие с подогревом 2,5×0,5',  group: 'equip', unit: 'qty', value: 1059.63, qty: 40, cur: 'EUR' },
+  { id: 'e_fan5_barn', name: 'Вентилятор горизонтальный Ø5 м (коровник)', group: 'equip', unit: 'qty', value: 3606.6, qty: 20, cur: 'EUR' },
+  { id: 'e_curtain',  name: 'Шторы автоматические ПВХ 1,5 м, пм',       group: 'equip', unit: 'qty', value: 149.7, qty: 252, cur: 'EUR' },
+  { id: 'e_headlock', name: 'Кормовые заграждения ХЭДЛОК, пм',          group: 'equip', unit: 'qty', value: 166.5, qty: 210, cur: 'EUR' },
+  { id: 'e_scraper',  name: 'Скреперная система навозоудаления, компл.', group: 'equip', unit: 'qty', value: 22000, qty: 6, cur: 'EUR' },
+  { id: 'e_fence_barn', name: 'Разделительные заборы и калитки (коровник), пм', group: 'equip', unit: 'qty', value: 89.6, qty: 500, cur: 'EUR' },
+  { id: 'e_brush',    name: 'Автоматическая щётка для коров',           group: 'equip', unit: 'qty', value: 2560.3, qty: 8, cur: 'EUR' },
+  { id: 'e_shaft',    name: 'Шахты с вентилятором 14 тыс. м³',          group: 'equip', unit: 'qty', value: 750, qty: 29, cur: 'EUR' },
+  { id: 'e_puzzle',   name: 'Пазловые маты',                           group: 'equip', unit: 'qty', value: 72, qty: 200, cur: 'EUR' },
+  { id: 'e_simple_lock', name: 'Упрощённые кормовые заграждения, пм',   group: 'equip', unit: 'qty', value: 60, qty: 110, cur: 'EUR' },
+  { id: 'e_calfhut',  name: 'Домики для телят',                        group: 'equip', unit: 'qty', value: 350, qty: 100, cur: 'EUR' },
+  { id: 'e_hoof',     name: 'Станок гидравлический для обработки копыт', group: 'equip', unit: 'qty', value: 14956.9, qty: 2, cur: 'EUR' },
+  { id: 'e_milktaxi', name: 'Молочное такси 250 л с подогревом',        group: 'equip', unit: 'qty', value: 11150, qty: 2, cur: 'EUR' },
+  { id: 'e_belt',     name: 'Лента для кормового стола, пм',            group: 'equip', unit: 'qty', value: 0, qty: 276, cur: 'EUR' },
+
+  /* --- Техника --- */
+  { id: 't_mixer',    name: 'Кормораздатчик',                          group: 'equip', unit: 'qty', value: 56200, qty: 1, cur: 'EUR' },
+  { id: 't_loader1',  name: 'Погрузчик',                               group: 'equip', unit: 'qty', value: 46820, qty: 1, cur: 'EUR' },
+  { id: 't_milktruck', name: 'Молоковоз',                              group: 'equip', unit: 'qty', value: 125000, qty: 1, cur: 'EUR' },
+  { id: 't_manitou',  name: 'Телескопический погрузчик',               group: 'equip', unit: 'qty', value: 65500, qty: 1, cur: 'EUR' },
+  { id: 't_loader2',  name: 'Погрузчик (второй)',                      group: 'equip', unit: 'qty', value: 46810, qty: 1, cur: 'EUR' },
+
+  /* --- Оборудование галереи --- */
+  { id: 'g_fence',    name: 'Разделительные заборы и калитки (галерея), пм', group: 'equip', unit: 'qty', value: 89.6, qty: 180, cur: 'EUR' },
+  { id: 'g_mats',     name: 'Рулонные маты (галерея), пм',             group: 'equip', unit: 'qty', value: 80, qty: 168, cur: 'EUR' },
+
+  /* --- Оборудование предлагуны --- */
+  { id: 'l_separator', name: 'Сепаратор 5,5 кВт',                      group: 'equip', unit: 'qty', value: 34333.2, qty: 1, cur: 'EUR' },
+  { id: 'l_pump37',   name: 'Насос погружной 37 кВт',                  group: 'equip', unit: 'qty', value: 31059, qty: 1, cur: 'EUR' },
+  { id: 'l_pump22',   name: 'Насос погружной 22 кВт',                  group: 'equip', unit: 'qty', value: 14912.2, qty: 1, cur: 'EUR' },
+  { id: 'l_pump55',   name: 'Насос погружной 5,5 кВт',                 group: 'equip', unit: 'qty', value: 13525.5, qty: 1, cur: 'EUR' },
+  { id: 'l_manmixer', name: 'Миксер навозный',                        group: 'equip', unit: 'qty', value: 12733, qty: 1, cur: 'EUR' },
 
   { id: 'herd',      name: 'Закуп нетелей',                  group: 'herd',  unit: 'head',  value: 0, cur: 'KZT', auto: true }
 ];
