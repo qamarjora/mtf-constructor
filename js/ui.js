@@ -134,14 +134,19 @@ MTF.renderInputs = function (res) {
     field('Значение удоя', 'production.milkYield',
       P.production.yieldMode === 'daily' ? 'л/сут' : 'л') +
     '<div class="hint">Расчётный годовой удой на фуражную корову: <b>' +
-    MTF.fmt.num(meta.yieldYear) + ' л</b>. Доля дойных в стаде: <b>' +
-    MTF.fmt.pct(meta.milkingShare * 100, 0) + '</b>, межотёльный период ' +
-    MTF.fmt.num(meta.calvingInterval) + ' дн.</div>' +
+    MTF.fmt.num(meta.yieldYear) + ' л</b>. Межотёльный период ' +
+    MTF.fmt.num(meta.calvingInterval) + ' дн.<br>Структура стада: дойные <b>' +
+    MTF.fmt.pct(meta.milkingShare * 100, 0) + '</b>, сухостой <b>' +
+    MTF.fmt.pct(meta.dryShare * 100, 0) + '</b>, родилка <b>' +
+    MTF.fmt.pct(meta.penShare * 100, 0) + '</b>.</div>' +
     field('Выход телят на 100 коров', 'production.calvingRate', 'гол') +
     field('Выбраковка', 'production.cullRate', '%/год') +
     field('Падёж телят', 'production.calfMortality', '%') +
     field('Падёж молодняка', 'production.heiferMortality', '%') +
     field('Дней сухостоя', 'production.dryDays', 'дн') +
+    field('Дней в родильном отделении', 'production.calvingPenDays', 'дн') +
+    field('Карантин завозного поголовья', 'production.quarantineDays', 'дн') +
+    field('Удой первотёлки', 'production.firstCalfYield', '% от взр.') +
     field('Доля тёлочек в приплоде', 'production.heiferShare', '%') +
     field('Возраст первого отёла', 'production.firstCalvingMo', 'мес') +
     field('Возраст продажи телят', 'production.calfSaleAgeMo', 'мес') +
@@ -160,7 +165,8 @@ MTF.renderInputs = function (res) {
     field('Режим расчёта', 'feed.mode', '', 'select',
       [['purchase', 'Покупные по нормам'], ['own', 'Своя кормовая база'], ['lump', 'Одной суммой в год']]) +
     (P.feed.mode === 'purchase' ?
-      field('СВ на корову', 'feed.dmCow', 'кг/сут') +
+      field('СВ на дойную корову', 'feed.dmCow', 'кг/сут') +
+      field('СВ на сухостойную', 'feed.dmDry', 'кг/сут') +
       field('СВ на тёлку', 'feed.dmHeifer', 'кг/сут') +
       field('СВ на телёнка', 'feed.dmCalf', 'кг/сут') +
       (P.production.bullMode !== 'sell_calf' ? field('СВ на бычка', 'feed.dmBull', 'кг/сут') : '') +
@@ -217,7 +223,7 @@ MTF.renderHerd = function (res) {
 
   const rows = res.herd.map(y =>
     '<tr><td class="n">' + y.year + '</td>' +
-    ['cows', 'milking', 'dry', 'calves', 'heifers', 'bulls'].map(k => '<td class="n">' + f.num(y[k]) + '</td>').join('') +
+    ['cows', 'milking', 'dry', 'pen', 'calves', 'heifers', 'bulls'].map(k => '<td class="n">' + f.num(y[k]) + '</td>').join('') +
     '<td class="n"><b>' + f.num(y.total) + '</b></td>' +
     '<td class="n">' + f.num(y.milkLiters / 1000) + '</td>' +
     '<td class="n">' + f.num(y.milkPerCow) + '</td>' +
@@ -229,7 +235,7 @@ MTF.renderHerd = function (res) {
   return warnHtml +
     '<div class="grid g2"><div class="card"><h3>Контроль скотомест на пике стада (' + peak.year + ')</h3>' +
     bar('Дойные', peak.milking, C.cowPlaces) +
-    bar('Сухостой', peak.dry, C.dryPlaces) +
+    bar('Сухостой + родилка', peak.dry + peak.pen, C.dryPlaces) +
     bar('Телята', peak.calves, C.calfPlaces) +
     bar('Ремонтный молодняк', peak.heifers, C.heiferPlaces) +
     bar('Бычки на откорме', peak.bulls, C.bullPlaces) +
@@ -249,7 +255,7 @@ MTF.renderHerd = function (res) {
     f.num(res.herd.reduce((a, y) => a + y.heifersPurchased, MTF.state.params.herd.startHeifers)) + '</b> гол.</div></div></div>' +
 
     '<div class="card" style="margin-top:14px"><h3>Движение поголовья по годам</h3><div class="tw"><table>' +
-    '<thead><tr><th>Год</th><th>Фураж.</th><th>Дойные</th><th>Сухост.</th><th>Телята</th>' +
+    '<thead><tr><th>Год</th><th>Фураж.</th><th>Дойные</th><th>Сухост.</th><th>Родилка</th><th>Телята</th>' +
     '<th>Молодн.</th><th>Бычки</th><th>Всего</th><th>Надой, т</th><th>л/фур.гол</th>' +
     '<th>Прод. телят</th><th>Выбрак.</th><th>Закуп нет.</th><th>Гибк. места</th></tr></thead><tbody>' +
     rows + '</tbody></table></div></div>';
