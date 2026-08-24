@@ -109,8 +109,10 @@ MTF.renderInputs = function (res) {
     field('Ремонтный молодняк', 'capacity.heiferPlaces', 'мест') +
     field('Откорм бычков', 'capacity.bullPlaces', 'мест') +
     field('Гибкое размещение', 'capacity.flexHousing', '', 'check') +
-    '<div class="hint">Фуражное поголовье = дойные + сухостой = <b>' +
-    (P.capacity.cowPlaces + P.capacity.dryPlaces) + '</b> гол.<br>' +
+    '<div class="hint">Проектная мощность: <b>' + MTF.fmt.num(res.herd.meta.target) +
+    '</b> фуражных коров, из них дойных <b>' +
+    MTF.fmt.num(res.herd.meta.target * res.herd.meta.milkingShare) + '</b>.<br>' +
+    'Мощность ограничена наименьшим из помещений — коровником или родильно-сухостойным блоком.<br>' +
     'Гибкое размещение разрешает ставить молодняк на свободные места коровника, ' +
     'пока стадо не вышло на проектную мощность.</div>' +
     '</div>' +
@@ -211,6 +213,7 @@ MTF.renderHerd = function (res) {
   const f = MTF.fmt, C = MTF.state.params.capacity;
   const last = res.herd[res.herd.length - 1];
   const peak = res.herd.reduce((a, y) => a.cows > y.cows ? a : y, res.herd[0]);
+  const tgt = res.herd.meta.target;
 
   function bar(label, cur, cap) {
     const pv = cap > 0 ? cur / cap * 100 : (cur > 0 ? 999 : 0);
