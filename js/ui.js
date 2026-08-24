@@ -271,21 +271,31 @@ MTF.renderEcon = function (res) {
     const row = cap.rows.find(r => r.id === it.id);
     const sum = row ? row.sum : 0;
     const isAuto = it.id === 'herd' && it.auto;
-    return '<tr><td><input type="text" data-cxn="' + i + '" value="' + it.name + '" style="width:100%;text-align:left;font-family:var(--sans)"></td>' +
-      '<td><select data-cxg="' + i + '">' + Object.keys(gname).map(g =>
+    const rateVal = isAuto ? P.herd.heiferPrice : it.value;
+    const curVal = isAuto ? P.herd.heiferCurrency : it.cur;
+    return '<tr><td><input type="text" data-cxn="' + i + '" value="' + it.name + '" style="width:100%;text-align:left;font-family:var(--sans)"' + (isAuto ? ' disabled' : '') + '></td>' +
+      '<td><select data-cxg="' + i + '"' + (isAuto ? ' disabled' : '') + '>' + Object.keys(gname).map(g =>
         '<option value="' + g + '"' + (g === it.group ? ' selected' : '') + '>' + gname[g] + '</option>').join('') + '</select></td>' +
       '<td><select data-cxu="' + i + '"' + (isAuto ? ' disabled' : '') + '>' +
-        [['sum', 'Сумма'], ['place', 'За место'], ['head', 'За голову']].map(u =>
+        [['sum', 'Сумма, тыс.'], ['qty', 'Цена × кол-во'], ['place', 'За место'], ['head', 'За голову']].map(u =>
         '<option value="' + u[0] + '"' + (u[0] === it.unit ? ' selected' : '') + '>' + u[1] + '</option>').join('') + '</select></td>' +
-      '<td><input type="number" data-cxv="' + i + '" value="' + it.value + '" step="any" style="width:88px"' +
+      '<td><input type="number" data-cxv="' + i + '" value="' + rateVal + '" step="any" style="width:92px"' +
         (isAuto ? ' disabled' : '') + '></td>' +
+      '<td>' + (it.unit === 'qty'
+        ? '<input type="number" data-cxq="' + i + '" value="' + (it.qty || 0) + '" step="any" style="width:66px">'
+        : (isAuto ? '<span class="hint" style="margin:0">' + f.num(P.herd.startHeifers) + '</span>' : '—')) + '</td>' +
       '<td><select data-cxc="' + i + '"' + (isAuto ? ' disabled' : '') + ' class="cursel">' +
         Object.keys(MTF.currencies).map(c =>
-        '<option value="' + c + '"' + (c === it.cur ? ' selected' : '') + '>' + MTF.currencies[c].sign + '</option>').join('') + '</select></td>' +
+        '<option value="' + c + '"' + (c === curVal ? ' selected' : '') + '>' + MTF.currencies[c].sign + '</option>').join('') + '</select></td>' +
       '<td class="n">' + f.num(sum) + '</td>' +
       '<td>' + (isAuto ? '<span class="hint" style="margin:0">авто</span>' :
         '<button class="del" data-cxdel="' + i + '">×</button>') + '</td></tr>';
   }).join('');
+
+  const groupTotals = ['prep', 'build', 'equip', 'herd']
+    .filter(g => cap.groups[g] > 0)
+    .map(g => '<tr class="sub"><td>' + gname[g] + ' — подытог</td><td></td><td></td><td></td><td></td><td></td>' +
+      '<td class="n">' + f.num(cap.groups[g]) + '</td><td></td></tr>').join('');
 
   const staffBlock = P.staff.mode === 'lump'
     ? field('ФОТ с начислениями в год', 'staff.lumpAnnual', 'т.₸') +
@@ -333,14 +343,15 @@ MTF.renderEcon = function (res) {
     '<td><button class="del" data-oxdel="' + i + '">×</button></td></tr>').join('');
 
   return '<div class="card"><h3>Капитальные затраты</h3><div class="tw"><table>' +
-    '<thead><tr><th>Статья</th><th>Группа</th><th>Тип</th><th>Ставка</th><th>Вал.</th><th>Итого, т.₸</th><th></th></tr></thead><tbody>' +
+    '<thead><tr><th>Статья</th><th>Группа</th><th>Тип</th><th>Цена</th><th>Кол-во</th><th>Вал.</th><th>Итого, т.₸</th><th></th></tr></thead><tbody>' +
     capexRows +
-    '<tr class="sub"><td>Резерв ' + MTF.capexReserve + '%</td><td></td><td></td><td></td><td></td><td class="n">' + f.num(cap.reserve) + '</td><td></td></tr>' +
-    '<tr class="tot"><td>Итого</td><td></td><td></td><td></td><td></td><td class="n">' + f.num(cap.total) + '</td><td></td></tr>' +
+    '<tr class="sub"><td>Резерв ' + MTF.capexReserve + '%</td><td colspan="5"></td><td class="n">' + f.num(cap.reserve) + '</td><td></td></tr>' +
+    '<tr class="tot"><td>Итого</td><td colspan="5"></td><td class="n">' + f.num(cap.total) + '</td><td></td></tr>' +
     '</tbody></table></div>' +
     '<button class="btn" id="addCapex" style="margin-top:10px">Добавить статью</button>' +
-    '<div class="hint">Тип «за место» умножает ставку на количество мест соответствующей группы. ' +
-    'Валюта пересчитывается по курсу из вкладки «Вводные».</div></div>' +
+    '<div class="hint">Тип «цена × кол-во» — для позиций со спецификацией. «За место» умножает цену на количество ' +
+    'мест соответствующей группы. Строка закупа нетелей берёт цену, валюту и количество из вкладки «Вводные». ' +
+    'Валюта пересчитывается по курсу оттуда же.</div></div>' +
 
     '<div class="grid g2" style="margin-top:14px">' +
     '<div class="card"><h3>Оплата труда</h3>' +
@@ -573,11 +584,21 @@ MTF.bind = function () {
   });
 
   const bindArr = (sel, fn) => document.querySelectorAll(sel).forEach(el => el.onchange = () => { fn(el); upd(); });
-  bindArr('[data-cxv]', el => S.capexItems[el.dataset.cxv].value = parseFloat(el.value) || 0);
+  bindArr('[data-cxv]', el => {
+    const it = S.capexItems[el.dataset.cxv];
+    if (it.id === 'herd' && it.auto) MTF.state.params.herd.heiferPrice = parseFloat(el.value) || 0;
+    else it.value = parseFloat(el.value) || 0;
+  });
+  bindArr('[data-cxq]', el => S.capexItems[el.dataset.cxq].qty = parseFloat(el.value) || 0);
+  bindArr('[data-cxq]', el => S.capexItems[el.dataset.cxq].qty = parseFloat(el.value) || 0);
   bindArr('[data-cxn]', el => S.capexItems[el.dataset.cxn].name = el.value);
   bindArr('[data-cxg]', el => S.capexItems[el.dataset.cxg].group = el.value);
   bindArr('[data-cxu]', el => S.capexItems[el.dataset.cxu].unit = el.value);
-  bindArr('[data-cxc]', el => S.capexItems[el.dataset.cxc].cur = el.value);
+  bindArr('[data-cxc]', el => {
+    const it = S.capexItems[el.dataset.cxc];
+    if (it.id === 'herd' && it.auto) MTF.state.params.herd.heiferCurrency = el.value;
+    else it.cur = el.value;
+  });
   bindArr('[data-oxv]', el => S.opexItems[el.dataset.oxv].value = parseFloat(el.value) || 0);
   bindArr('[data-oxn]', el => S.opexItems[el.dataset.oxn].name = el.value);
   bindArr('[data-oxb]', el => S.opexItems[el.dataset.oxb].base = el.value);
@@ -601,7 +622,7 @@ MTF.bind = function () {
   const btn = (id, fn) => { const b = document.getElementById(id); if (b) b.onclick = fn; };
   btn('addCapex', () => {
     const n = prompt('Название статьи капзатрат');
-    if (n) { S.capexItems.push({ id: 'c' + Date.now(), name: n, group: 'build', unit: 'sum', value: 0, cur: 'KZT' }); upd(); }
+    if (n) { S.capexItems.push({ id: 'c' + Date.now(), name: n, group: 'equip', unit: 'qty', value: 0, qty: 1, cur: 'EUR' }); upd(); }
   });
   btn('addOpex', () => {
     const n = prompt('Название статьи расходов');
