@@ -69,7 +69,7 @@ MTF.docSections = [
     id: 'concept', title: '1. Общая концепция проекта', enabled: true,
     body: `**1.1. Суть проекта**
 
-Проект представляет собой создание и эксплуатацию сети современных молочно-товарных ферм (МТФ) на территории {{region}} области Республики Казахстан.
+Проект представляет собой создание и эксплуатацию сети современных молочно-товарных ферм (МТФ). Место реализации — Республика Казахстан, {{region}} область, {{district}} район.
 
 Основной продукт — сырое молоко, реализуемое на перерабатывающие предприятия региона. Дополнительными направлениями являются реализация телят и выбракованного поголовья.
 
@@ -82,10 +82,6 @@ MTF.docSections = [
 - Тип фермы: молочно-товарная, беспривязного содержания
 - Воспроизводство: искусственное осеменение
 - Стартовое поголовье: {{startHeifers}} нетелей, завоз в {{batches}} партии
-
-**1.3. Регион реализации**
-
-Место реализации: {{region}} область, {{district}} район.
 
 **1.4. Структура участия**
 
@@ -342,30 +338,42 @@ MTF.docTables = function (state, res) {
       ['Дисконтированная окупаемость', 'лет', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—'],
       ['Минимальный DSCR', '', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—']
     ]),
-    equipTable: (function () {
-      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
-      const eq = res.capex.rows.filter(r => r.group === 'equip');
-      const totKzt = eq.reduce((a, r) => a + r.sum, 0);
-      const rows = [
-        ['Комплект технологического оборудования и техники', f.num(eq.length), f.num(MTF.disp(p, totKzt), dd)]
-      ];
-      const herdRow = res.capex.rows.find(r => r.group === 'herd');
-      if (herdRow) rows.push(['Закуп поголовья (' + f.num(p.herd.startHeifers) + ' нетелей)', '—',
-        f.num(MTF.disp(p, herdRow.sum), dd)]);
-      return dt(['Наименование', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
-    })(),
     estimateTotalTable: (function () {
-      const N = p.project.farmsCount;
+      const N = p.project.farmsCount, P = p.production, tgt = res.herd.meta.target;
+      const need = tgt * P.cullRate / 100;
+      const h = need * (P.firstCalvingMo - P.calfSaleAgeMo) / 12;
+      const c = tgt * P.calvingRate / 100 * (1 - P.calfMortality / 100) * P.calfSaleAgeMo / 12;
+      const totHead = tgt + h + c;
       return dt(['Показатель', '1 ферма', N + ' ферм'], [
         ['Стоимость, млн ₸', f.num(res.capex.total / 1000, 1), f.num(res.capex.total * N / 1000, 1)],
         ['Стоимость, тыс. ₸', f.num(res.capex.total), f.num(res.capex.total * N)],
-        ['Фуражных коров, гол.', f.num(res.herd.meta.target), f.num(res.herd.meta.target * N)],
-        ['Общее поголовье, гол.', f.num(res.herd[res.herd.length - 1].total),
-          f.num(res.herd[res.herd.length - 1].total * N)],
+        ['Фуражных коров, гол.', f.num(tgt), f.num(tgt * N)],
+        ['Общее поголовье с молодняком, гол.', f.num(totHead), f.num(totHead * N)],
         ['Стоимость на 1 фуражную корову, тыс. ₸',
-          f.num(res.capex.total / Math.max(1, res.herd.meta.target)),
-          f.num(res.capex.total / Math.max(1, res.herd.meta.target))]
+          f.num(res.capex.total / Math.max(1, tgt)),
+          f.num(res.capex.total / Math.max(1, tgt))]
       ]);
+    })(),
+    equipTable: (function () {
+      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
+      const eq = res.capex.rows.filter(r => r.group === 'equip');
+      const byS = {};
+      eq.forEach(r => {
+        const it = state.capexItems.find(x => x.id === r.id);
+        const k = (it && it.sect) || 'Прочее оборудование';
+        if (!byS[k]) byS[k] = { n: 0, sum: 0 };
+        byS[k].n++; byS[k].sum += r.sum;
+      });
+      const order = ['ДМБ', 'Коровник', 'Техника', 'Галерея', 'Предлагуна', 'Прочее оборудование'];
+      const names = { 'ДМБ': 'Доильно-молочный блок', 'Коровник': 'Коровник и содержание',
+        'Техника': 'Сельскохозяйственная техника', 'Галерея': 'Галерея и переходы',
+        'Предлагуна': 'Навозоудаление и предлагуна' };
+      const rows = order.filter(k => byS[k]).map(k =>
+        [names[k] || k, f.num(byS[k].n), f.num(MTF.disp(p, byS[k].sum, dc), dd)]);
+      const tot = eq.reduce((a, r) => a + r.sum, 0);
+      rows.push(['<b>Итого оборудование и техника</b>', '<b>' + f.num(eq.length) + '</b>',
+        '<b>' + f.num(MTF.disp(p, tot, dc), dd) + '</b>']);
+      return dt(['Узел комплекса', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
     })(),
     capexTable: (function () {
       const GN = { prep: 'Подготовительный этап', build: 'Строительство и монтаж',
