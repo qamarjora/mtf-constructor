@@ -37,6 +37,7 @@ MTF.initState = function () {
     opexItems: JSON.parse(JSON.stringify(MTF.opexItems)),
     subsidies: JSON.parse(JSON.stringify(MTF.subsidies)),
     docSections: JSON.parse(JSON.stringify(MTF.docSections)),
+    docMode: 'estimate',
     version: MTF.VERSION
   };
 };
@@ -275,7 +276,7 @@ MTF.renderEcon = function (res) {
 
   const gname = { prep: 'Подготовка', build: 'Строительство', equip: 'Оборудование', herd: 'Поголовье' };
   const dcur = MTF.dispCur(P), dsign = MTF.dispSign(P);
-  const dd = dcur === 'KZT' ? 0 : 1;
+  const dd = 2;   // капзатраты показываем без округления
   const dunit = dcur === 'KZT' ? 'тыс. ₸' : 'тыс. ' + dsign;
 
   const capexRows = MTF.state.capexItems.map((it, i) => {
@@ -316,13 +317,13 @@ MTF.renderEcon = function (res) {
           '<tr><td><input type="text" data-stn="' + i + '" value="' + s.name + '" style="width:100%;text-align:left;font-family:var(--sans)"></td>' +
           '<td><input type="number" data-staff="' + i + '" data-fld="count" value="' + s.count + '" style="width:56px"></td>' +
           '<td><input type="number" data-staff="' + i + '" data-fld="salary" value="' + s.salary + '" style="width:76px"></td>' +
-          '<td class="n">' + f.num(s.count * s.salary * 12) + '</td>' +
+          '<td class="n">' + f.num(s.count * s.salary * 12, 1) + '</td>' +
           '<td><button class="del" data-delstaff="' + i + '">×</button></td></tr>').join('');
         const pr = MTF.calcPayroll(P, MTF.state.staff, P.capacity.cowPlaces + P.capacity.dryPlaces);
         return '<div class="tw"><table><thead><tr><th>Должность</th><th>Кол-во</th><th>Оклад, т.₸</th><th>В год</th><th></th></tr></thead><tbody>' +
           rows +
-          '<tr class="tot"><td>ФОТ на руки</td><td></td><td></td><td class="n">' + f.num(pr.net) + '</td><td></td></tr>' +
-          '<tr class="sub"><td>С начислениями ' + MTF.payrollTaxRate + '%</td><td></td><td></td><td class="n">' + f.num(pr.gross) + '</td><td></td></tr>' +
+          '<tr class="tot"><td>ФОТ на руки</td><td></td><td></td><td class="n">' + f.num(pr.net, 1) + '</td><td></td></tr>' +
+          '<tr class="sub"><td>С начислениями ' + MTF.payrollTaxRate + '%</td><td></td><td></td><td class="n">' + f.num(pr.gross, 1) + '</td><td></td></tr>' +
           '</tbody></table></div>' +
           '<button class="btn" id="addStaff" style="margin-top:10px">Добавить должность</button>' +
           field('Масштабировать под поголовье', 'staff.scaleToHerd', '', 'check') +
@@ -332,17 +333,17 @@ MTF.renderEcon = function (res) {
 
   const pnlRows = res.pnl.map(y =>
     '<tr><td class="n">' + y.year + '</td>' +
-    '<td class="n">' + f.num(y.revenue) + '</td>' +
-    '<td class="n pos">' + f.num(y.subsidy) + '</td>' +
-    '<td class="n">' + f.num(y.opex) + '</td>' +
-    '<td class="n">' + f.num(y.operatorFee) + '</td>' +
-    '<td class="n ' + (y.ebitda < 0 ? 'neg' : '') + '"><b>' + f.num(y.ebitda) + '</b></td>' +
+    '<td class="n">' + f.num(y.revenue, 1) + '</td>' +
+    '<td class="n pos">' + f.num(y.subsidy, 1) + '</td>' +
+    '<td class="n">' + f.num(y.opex, 1) + '</td>' +
+    '<td class="n">' + f.num(y.operatorFee, 1) + '</td>' +
+    '<td class="n ' + (y.ebitda < 0 ? 'neg' : '') + '"><b>' + f.num(y.ebitda, 1) + '</b></td>' +
     '<td class="n ' + (y.margin < 0 ? 'neg' : '') + '">' + f.pct(y.margin, 0) + '</td>' +
     '<td class="n">' + f.num(y.milkCost, 1) + '</td></tr>').join('');
 
   const yi = Math.min(4, res.pnl.length - 1), y5 = res.pnl[yi];
   const opexDetail = Object.entries(y5.opexDetail).sort((a, b) => b[1] - a[1])
-    .map(([k, v]) => '<tr><td>' + k + '</td><td class="n">' + f.num(v) + '</td><td class="n">' +
+    .map(([k, v]) => '<tr><td>' + k + '</td><td class="n">' + f.num(v, 1) + '</td><td class="n">' +
       f.pct(v / y5.opex * 100, 1) + '</td></tr>').join('');
 
   const opexRows = MTF.state.opexItems.map((it, i) =>
@@ -388,7 +389,7 @@ MTF.renderEcon = function (res) {
 
     '<div class="card" style="margin-top:14px"><h3>Структура затрат, ' + y5.year + ' год</h3><div class="tw"><table>' +
     '<thead><tr><th>Статья</th><th>Сумма, т.₸</th><th>Доля</th></tr></thead><tbody>' + opexDetail +
-    '<tr class="tot"><td>Итого</td><td class="n">' + f.num(y5.opex) + '</td><td class="n">100%</td></tr>' +
+    '<tr class="tot"><td>Итого</td><td class="n">' + f.num(y5.opex, 1) + '</td><td class="n">100%</td></tr>' +
     '</tbody></table></div>' + (y5.feedHa ? '<div class="hint">Площадь кормовой базы в этот год: ' +
     f.num(y5.feedHa) + ' га.</div>' : '') + '</div>';
 };
@@ -547,6 +548,8 @@ MTF.renderFin = function (res) {
 
 /* ---------- 6. Документ ---------- */
 MTF.renderDocTab = function (res) {
+  const mode = MTF.state.docMode || 'custom';
+  const m = MTF.docModes.find(x => x.id === mode) || MTF.docModes[MTF.docModes.length - 1];
   const secs = MTF.renderDoc(MTF.state, res);
   const list = MTF.state.docSections.map((s, i) =>
     '<label><input type="checkbox" data-sec="' + i + '"' + (s.enabled ? ' checked' : '') + '> ' + s.title + '</label>').join('');
@@ -557,8 +560,14 @@ MTF.renderDocTab = function (res) {
     '<button class="btn" id="expPdf">Печать / PDF</button>' +
     '<button class="btn" id="expCsv">Таблицы в CSV</button>' +
     '<button class="btn" id="editTpl">Править шаблоны</button></div>' +
-    '<div class="doc-wrap"><div class="card doc-list no-print"><h3>Разделы</h3>' + list +
-    '<div class="hint">Плейсхолдеры в фигурных скобках подставляются из расчёта.</div></div>' +
+    '<div class="doc-wrap"><div class="card doc-list no-print">' +
+    '<h3>Вид документа</h3>' +
+    '<div class="f wide" style="margin-bottom:6px"><select id="docMode" style="width:100%">' +
+    MTF.docModes.map(x => '<option value="' + x.id + '"' + (x.id === mode ? ' selected' : '') +
+      '>' + x.name + '</option>').join('') + '</select></div>' +
+    '<div class="hint" style="margin:0 0 16px">' + m.hint + '</div>' +
+    '<h3>Разделы</h3>' + list +
+    '<div class="hint">Правка галочек переключает вид на «Свой набор разделов».</div></div>' +
     '<div class="doc-prev" id="docPrev">' + prev + '</div></div>';
 };
 
@@ -646,7 +655,10 @@ MTF.bind = function () {
   bindArr('[data-staff]', el => S.staff[el.dataset.staff][el.dataset.fld] = parseFloat(el.value) || 0);
   bindArr('[data-subval]', el => S.subsidies[el.dataset.subval].value = parseFloat(el.value) || 0);
   bindArr('[data-sub]', el => S.subsidies[el.dataset.sub].enabled = el.checked);
-  bindArr('[data-sec]', el => S.docSections[el.dataset.sec].enabled = el.checked);
+  bindArr('[data-sec]', el => {
+    S.docSections[el.dataset.sec].enabled = el.checked;
+    S.docMode = 'custom';
+  });
   document.querySelectorAll('[data-cmt]').forEach(el =>
     el.onchange = () => { S.subsidies[el.dataset.cmt].comment = el.value; MTF.save(); });
 
@@ -694,6 +706,9 @@ MTF.bind = function () {
     upd();
   };
 
+  const dm = document.getElementById('docMode');
+  if (dm) dm.onchange = () => { MTF.applyDocMode(S, dm.value); upd(); };
+
   ['expWord', 'expPdf', 'expCsv', 'editTpl'].forEach(id => btn(id, () => MTF.export[id]()));
 };
 
@@ -730,6 +745,7 @@ MTF.load = function () {
       opexItems: Array.isArray(o.opexItems) ? o.opexItems : base.opexItems,
       subsidies: Array.isArray(o.subsidies) && o.subsidies.length ? o.subsidies : base.subsidies,
       docSections: Array.isArray(o.docSections) && o.docSections.length ? o.docSections : base.docSections,
+      docMode: o.docMode || 'estimate',
       version: MTF.VERSION
     };
   } catch (e) { return null; }
@@ -737,6 +753,8 @@ MTF.load = function () {
 
 window.addEventListener('DOMContentLoaded', function () {
   MTF.state = MTF.load() || MTF.initState();
+  if (!MTF.state.docMode) MTF.state.docMode = 'estimate';
+  if (MTF.state.docMode !== 'custom') MTF.applyDocMode(MTF.state, MTF.state.docMode);
   document.getElementById('ver').textContent = 'v' + MTF.VERSION;
   document.getElementById('btnSave').onclick = () => MTF.export.saveJson();
   document.getElementById('btnLoad').onclick = () => MTF.export.loadJson();
