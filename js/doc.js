@@ -355,36 +355,32 @@ MTF.docTables = function (state, res) {
       return dt(['Наименование', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
     })(),
     estimateTotalTable: (function () {
-      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
       const N = p.project.farmsCount;
-      const D = v => f.num(MTF.disp(p, v), dd);
       return dt(['Показатель', '1 ферма', N + ' ферм'], [
-        ['Стоимость, тыс. ' + dsg, D(res.capex.total), D(res.capex.total * N)],
+        ['Стоимость, млн ₸', f.num(res.capex.total / 1000, 1), f.num(res.capex.total * N / 1000, 1)],
+        ['Стоимость, тыс. ₸', f.num(res.capex.total), f.num(res.capex.total * N)],
         ['Фуражных коров, гол.', f.num(res.herd.meta.target), f.num(res.herd.meta.target * N)],
-        ['Стоимость на 1 фуражную корову, тыс. ' + dsg,
-          D(res.capex.total / Math.max(1, res.herd.meta.target)),
-          D(res.capex.total / Math.max(1, res.herd.meta.target))]
+        ['Общее поголовье, гол.', f.num(res.herd[res.herd.length - 1].total),
+          f.num(res.herd[res.herd.length - 1].total * N)],
+        ['Стоимость на 1 фуражную корову, тыс. ₸',
+          f.num(res.capex.total / Math.max(1, res.herd.meta.target)),
+          f.num(res.capex.total / Math.max(1, res.herd.meta.target))]
       ]);
     })(),
     capexTable: (function () {
-      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
-      const D = v => f.num(MTF.disp(p, v), dd);
-      const gname = { prep: 'Подготовительные расходы', build: 'Строительство',
-                      equip: 'Оборудование и техника', herd: 'Закуп поголовья' };
-      const rows = [];
-      ['prep', 'build', 'herd'].forEach(g => {
-        res.capex.rows.filter(r => r.group === g).forEach(r => {
-          rows.push([r.name, D(r.sum)]);
+      const GN = { prep: 'Подготовительный этап', build: 'Строительство и монтаж',
+                   equip: 'Оборудование и техника', herd: 'Поголовье' };
+      const rows = ['prep', 'build', 'equip', 'herd']
+        .filter(g => res.capex.groups[g] > 0).map(g => {
+          const gc = MTF.groupCur(p, g), gs = MTF.groupSign(p, g);
+          return [GN[g],
+            f.num(MTF.disp(p, res.capex.groups[g], gc), gc === 'KZT' ? 0 : 1) + ' ' + gs,
+            f.num(res.capex.groups[g]),
+            f.pct(res.capex.groups[g] / res.capex.total * 100, 1)];
         });
-      });
-      const eq = res.capex.rows.filter(r => r.group === 'equip');
-      if (eq.length) {
-        rows.push([gname.equip + ' (' + eq.length + ' позиций)',
-          D(eq.reduce((a, r) => a + r.sum, 0))]);
-      }
-      if (res.capex.reserve > 0) rows.push(['Резерв на непредвиденные расходы', D(res.capex.reserve)]);
-      rows.push(['<b>Итого капитальные затраты</b>', '<b>' + D(res.capex.total) + '</b>']);
-      return dt(['Статья', 'Сумма, тыс. ' + dsg], rows);
+      rows.push(['<b>Итого стоимость фермы</b>', '—',
+        '<b>' + f.num(res.capex.total) + '</b>', '<b>100%</b>']);
+      return dt(['Группа затрат', 'В валюте закупа', 'Тыс. ₸', 'Доля'], rows);
     })(),
     fundingTable: dt(['Статья', 'Сумма, тыс. ₸', 'Доля'], [
       ['Подготовительные расходы', f.num(res.capex.groups.prep), f.pct(res.capex.groups.prep / res.capex.total * 100, 1)],
