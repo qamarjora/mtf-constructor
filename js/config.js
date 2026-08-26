@@ -28,7 +28,10 @@ MTF.defaults = {
     startYear: 2027,
     horizon: 12,
     baseCurrency: 'KZT',
-    displayCurrency: 'EUR',   // валюта отображения сумм в разделе капзатрат
+    displayCurrency: 'EUR',   // валюта сводного итога
+    groupCurrency: {          // валюта отображения по группам капзатрат
+      prep: 'KZT', build: 'KZT', equip: 'EUR', herd: 'EUR'
+    },
     rateEUR: 520,
     rateUSD: 480,
     rateRUB: 5.4
@@ -246,8 +249,17 @@ MTF.dispSign = function (p) {
   const c = MTF.dispCur(p);
   return (MTF.currencies[c] || MTF.currencies.KZT).sign;
 };
-MTF.disp = function (p, kzt) {
-  const c = MTF.dispCur(p);
+MTF.disp = function (p, kzt, cur) {
+  const c = cur || MTF.dispCur(p);
   if (c === 'KZT') return kzt;
   return kzt / MTF.rate(p, c);
+};
+
+/* Валюта отображения конкретной группы капзатрат */
+MTF.groupCur = function (p, g) {
+  const m = (p.project && p.project.groupCurrency) || {};
+  return m[g] || 'KZT';
+};
+MTF.groupSign = function (p, g) {
+  return (MTF.currencies[MTF.groupCur(p, g)] || MTF.currencies.KZT).sign;
 };
