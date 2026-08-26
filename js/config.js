@@ -137,6 +137,16 @@ MTF.defaults = {
    cur:   валюта статьи
 ------------------------------------------------ */
 MTF.capexItems = [
+  /* --- Подготовительный этап --- */
+  { id: 'p_land',  name: 'Земельный участок',                group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+  { id: 'p_psd',   name: 'Проектирование (ПСД)',             group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+  { id: 'p_exp',   name: 'Вневедомственная экспертиза',      group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+  { id: 'p_geo',   name: 'Геология и топосъёмка',            group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+
+  /* --- Строительство --- */
+  { id: 'b_all',   name: 'Строительство зданий и инфраструктура', group: 'build', unit: 'sum', value: 200000, cur: 'KZT' },
+  { id: 'b_mount', name: 'Монтаж технологического оборудования',  group: 'build', unit: 'sum', value: 25000,  cur: 'KZT' },
+
   /* --- Оборудование доильно-молочного блока --- */
   { id: 'e_parallel', name: 'Доильная установка «Параллель», комплект', group: 'equip', unit: 'qty', value: 252000, qty: 1, cur: 'EUR' },
   { id: 'e_fan5_dmb', name: 'Вентилятор горизонтальный Ø5 м (ДМБ)',    group: 'equip', unit: 'qty', value: 3606.6, qty: 3, cur: 'EUR' },
