@@ -13,6 +13,12 @@ function download(blob, name) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
+/* Мажорная часть версии: '1.2.0' -> '1'. Пустая/битая версия даёт '' */
+function majorVersion(v) {
+  const m = String(v == null ? '' : v).match(/^\s*(\d+)\./);
+  return m ? m[1] : '';
+}
+
 function fname(ext) {
   const n = (MTF.state.params.project.name || 'Проект').replace(/[^\wа-яА-ЯёЁ\- ]/g, '').trim();
   return n + ' — модель проекта.' + ext;
@@ -137,7 +143,10 @@ MTF.export.loadJson = function () {
       try {
         const s = JSON.parse(rd.result);
         if (!s.params) throw new Error('нет параметров');
-        if (s.version !== MTF.VERSION && !confirm(
+        /* Внутри одной мажорной версии формат совместим — открываем молча.
+           Предупреждаем только при смене мажорной или неизвестной версии. */
+        const fileMajor = majorVersion(s.version);
+        if (fileMajor !== majorVersion(MTF.VERSION) && !confirm(
           'Файл сохранён в версии ' + (s.version || 'неизвестной') + ', текущая ' + MTF.VERSION +
           '. Часть параметров может не примениться. Открыть?')) return;
         MTF.scenarios = s.scenarios || [];
