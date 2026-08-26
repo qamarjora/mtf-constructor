@@ -4,6 +4,66 @@
 
 window.MTF = window.MTF || {};
 
+
+/* ============================================================
+   РЕЖИМЫ ДОКУМЕНТА
+   Каждый режим — свой набор разделов и своё название.
+   Добавить режим = дописать объект в этот список.
+   ============================================================ */
+MTF.docModes = [
+  {
+    id: 'estimate',
+    name: 'Смета проекта',
+    label: 'Смета проекта',
+    hint: 'Стоимость фермы по группам затрат. Без финансовой модели.',
+    sections: ['concept', 'farm', 'estimate', 'equipment', 'stages', 'disclaimer']
+  },
+  {
+    id: 'technical',
+    name: 'Техническое описание фермы',
+    label: 'Техническое описание',
+    hint: 'Планировка, помещения, технология, оборудование. Для подрядчиков и поставщиков.',
+    sections: ['concept', 'farm', 'equipment', 'stages', 'disclaimer']
+  },
+  {
+    id: 'passport',
+    name: 'Паспорт проекта',
+    label: 'Паспорт проекта',
+    hint: 'Мощность, объёмы производства, состав затрат. Под инвестиционное субсидирование.',
+    sections: ['concept', 'farm', 'herddyn', 'estimate', 'equipment', 'finmodel', 'stages', 'disclaimer']
+  },
+  {
+    id: 'bizplan',
+    name: 'Бизнес-план',
+    label: 'Бизнес-план',
+    hint: 'Полный формат для кредитора: производство, экономика, финансирование, риски.',
+    sections: ['concept', 'farm', 'herddyn', 'estimate', 'equipment', 'stages', 'finmodel',
+               'consolidated', 'operator', 'risks', 'disclaimer']
+  },
+  {
+    id: 'investment',
+    name: 'Инвестиционное предложение',
+    label: 'Инвестиционное предложение',
+    hint: 'Для привлечения инвесторов: доходность, условия участия, ограничения.',
+    sections: ['concept', 'farm', 'deal', 'estimate', 'finmodel', 'consolidated',
+               'operator', 'limits', 'risks', 'disclaimer']
+  },
+  {
+    id: 'custom',
+    name: 'Свой набор разделов',
+    label: 'Модель проекта',
+    hint: 'Разделы выбираются вручную галочками.',
+    sections: null
+  }
+];
+
+MTF.applyDocMode = function (state, modeId) {
+  const m = MTF.docModes.find(x => x.id === modeId);
+  state.docMode = modeId;
+  if (!m || !m.sections) return;
+  state.docSections.forEach(s => { s.enabled = m.sections.indexOf(s.id) >= 0; });
+};
+
 MTF.docSections = [
   {
     id: 'concept', title: '1. Общая концепция проекта', enabled: true,
@@ -17,6 +77,7 @@ MTF.docSections = [
 
 - Количество ферм: {{farmsCount}} единиц
 - Проектная мощность фермы: {{capacityCows}} фуражных коров, в том числе {{cowPlaces}} дойных
+- Общее поголовье с ремонтным молодняком: {{totalAtCapacity}} голов
 - Совокупная мощность проекта: {{totalCows}} фуражных коров
 - Тип фермы: молочно-товарная, беспривязного содержания
 - Воспроизводство: искусственное осеменение
@@ -62,12 +123,36 @@ MTF.docSections = [
 
 {{structureTable}}
 
-**2.5. Динамика стада**
+`
+  },
+  {
+    id: 'herddyn', title: '3. Динамика стада', enabled: false,
+    body: `Прогноз изменения поголовья при выбранной схеме формирования стада.
 
 {{herdTable}}`
   },
   {
-    id: 'deal', title: '3. Структура сделки', enabled: true,
+    id: 'estimate', title: '3. Стоимость проекта', enabled: true,
+    body: `Расчёт стоимости создания одной типовой фермы.
+
+{{capexTable}}
+
+Стоимость строительства приведена предварительно и подлежит уточнению по проектно-сметной документации и коммерческим предложениям подрядчиков. Монтаж доильного оборудования выполняется поставщиком и в смету не включён.
+
+**Стоимость проекта в целом**
+
+{{estimateTotalTable}}`
+  },
+  {
+    id: 'equipment', title: '4. Оборудование и техника', enabled: true,
+    body: `Комплект технологического оборудования типовой фермы.
+
+{{equipTable}}
+
+Полная спецификация по позициям приводится в приложении к настоящему документу.`
+  },
+  {
+    id: 'deal', title: '5. Структура сделки', enabled: false,
     body: `**3.1. Правовая модель**
 
 - Консорциум без образования юридического лица
@@ -83,7 +168,7 @@ MTF.docSections = [
 Каждый инвестор заключает с Оператором договор управления на единых стандартизированных условиях. Вознаграждение Оператора: {{operatorFeeText}}.`
   },
   {
-    id: 'stages', title: '4. Этапы реализации', enabled: true,
+    id: 'stages', title: '6. Этапы реализации', enabled: true,
     body: `**Этап 1. Подготовительный** — оформление земельных участков, проектирование (ПСД), геология, топосъёмка, экспертиза, юридическое сопровождение.
 
 **Этап 2. Разрешительный** — получение разрешений на строительство, подключение инфраструктуры, согласования с уполномоченными органами.
@@ -97,7 +182,7 @@ MTF.docSections = [
 **Этап 6. Эксплуатация** — запуск производственного цикла, управление через Оператора, реализация продукции.`
   },
   {
-    id: 'finmodel', title: '5. Финансовая модель', enabled: true,
+    id: 'finmodel', title: '7. Финансовая модель', enabled: false,
     body: `Расчёт выполнен для одной типовой фермы на горизонте {{horizon}} лет ({{startYear}}–{{endYear}} гг.).
 
 **5.1. Инвестиционные метрики**
@@ -129,13 +214,13 @@ MTF.docSections = [
 {{subsidyTable}}`
   },
   {
-    id: 'consolidated', title: '6. Консолидация по проекту', enabled: true,
+    id: 'consolidated', title: '8. Консолидация по проекту', enabled: false,
     body: `Показатели проекта в целом при реализации {{farmsCount}} ферм.
 
 {{consolidatedTable}}`
   },
   {
-    id: 'operator', title: '7. Роль Оператора', enabled: true,
+    id: 'operator', title: '9. Роль Оператора', enabled: true,
     body: `Оператор проекта выполняет функцию единого центра управления:
 
 - Подготовка проекта: ПСД, экспертиза, земельные вопросы, разрешительная документация
@@ -152,7 +237,7 @@ MTF.docSections = [
 - Возможность участия без операционного опыта в животноводстве`
   },
   {
-    id: 'limits', title: '8. Ограничения и обязательства инвестора', enabled: true,
+    id: 'limits', title: '10. Ограничения и обязательства инвестора', enabled: false,
     body: `**8.1.** Ограничение на выход из проекта — на стадии строительства до ввода в эксплуатацию, на операционной стадии — не менее 3 лет с даты запуска фермы.
 
 **8.2.** Ограничение распоряжения активами — отчуждение, залог (кроме финансирующих организаций) и аренда фермы требуют согласия Оператора.
@@ -162,7 +247,7 @@ MTF.docSections = [
 **8.4.** Ограничение конкуренции и запрет на привлечение персонала — в течение срока участия и 3 лет после его прекращения.`
   },
   {
-    id: 'risks', title: '9. Риски и их снижение', enabled: true,
+    id: 'risks', title: '11. Риски и их снижение', enabled: true,
     body: `**Производственные риски** — падёж, снижение продуктивности, проблемы воспроизводства. Снижение: ветеринарный контроль, квалифицированный персонал, страхование поголовья.
 
 **Рыночные риски** — снижение закупочной цены на молоко, рост стоимости кормов. Снижение: долгосрочные договоры с переработчиками, формирование кормовых запасов.
@@ -257,6 +342,30 @@ MTF.docTables = function (state, res) {
       ['Дисконтированная окупаемость', 'лет', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—'],
       ['Минимальный DSCR', '', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—']
     ]),
+    equipTable: (function () {
+      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
+      const eq = res.capex.rows.filter(r => r.group === 'equip');
+      const totKzt = eq.reduce((a, r) => a + r.sum, 0);
+      const rows = [
+        ['Комплект технологического оборудования и техники', f.num(eq.length), f.num(MTF.disp(p, totKzt), dd)]
+      ];
+      const herdRow = res.capex.rows.find(r => r.group === 'herd');
+      if (herdRow) rows.push(['Закуп поголовья (' + f.num(p.herd.startHeifers) + ' нетелей)', '—',
+        f.num(MTF.disp(p, herdRow.sum), dd)]);
+      return dt(['Наименование', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
+    })(),
+    estimateTotalTable: (function () {
+      const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
+      const N = p.project.farmsCount;
+      const D = v => f.num(MTF.disp(p, v), dd);
+      return dt(['Показатель', '1 ферма', N + ' ферм'], [
+        ['Стоимость, тыс. ' + dsg, D(res.capex.total), D(res.capex.total * N)],
+        ['Фуражных коров, гол.', f.num(res.herd.meta.target), f.num(res.herd.meta.target * N)],
+        ['Стоимость на 1 фуражную корову, тыс. ' + dsg,
+          D(res.capex.total / Math.max(1, res.herd.meta.target)),
+          D(res.capex.total / Math.max(1, res.herd.meta.target))]
+      ]);
+    })(),
     capexTable: (function () {
       const dc = MTF.dispCur(p), dsg = MTF.dispSign(p), dd = dc === 'KZT' ? 0 : 1;
       const D = v => f.num(MTF.disp(p, v), dd);
@@ -334,6 +443,13 @@ MTF.buildDocData = function (state, res) {
     remontModeText: MTF.remontModeText[p.production.remontMode],
     bullModeText: MTF.bullModeText[p.production.bullMode],
     operatorFeeText: feeText,
+    totalAtCapacity: (function () {
+      const P = p.production, tgt = res.herd.meta.target;
+      const need = tgt * P.cullRate / 100;
+      const h = need * (P.firstCalvingMo - P.calfSaleAgeMo) / 12;
+      const c = tgt * P.calvingRate / 100 * (1 - P.calfMortality / 100) * P.calfSaleAgeMo / 12;
+      return f.num(tgt + h + c);
+    })(),
     quarantineDays: p.production.quarantineDays,
     dryDays: p.production.dryDays,
     calvingPenDays: p.production.calvingPenDays,
@@ -396,7 +512,7 @@ MTF.docHtml = function (state, secs) {
     '<div class="dt-meta">' +
     (p.project.region ? p.project.region + ' область' : '__________ область') + ' · ' +
     p.project.farmsCount + ' ферм · ' +
-    (p.capacity.cowPlaces + p.capacity.dryPlaces) + ' фуражных коров<br>' +
+    MTF.fmt.num(MTF.lastResult ? MTF.lastResult.herd.meta.target : 0) + ' фуражных коров<br>' +
     (p.project.operator || '__________') + ' · ' + d +
     '</div></div>' +
     secs.map(s => '<section><h2>' + s.title + '</h2>' + s.body + '</section>').join('');
