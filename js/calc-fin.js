@@ -129,7 +129,11 @@ MTF.payback = function (flows, rate) {
   return null;
 };
 
-MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears) {
+/* skipExits — не считать таблицу выходов инвестора.
+   Внутри неё бисекция IRR на каждый год горизонта, и это почти вся
+   стоимость функции. Контрольному прогону без господдержки нужны только
+   npv, irr, payback и minDscr, поэтому там таблица не строится. */
+MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears, skipExits) {
   const wacc = p.finance.wacc / 100;
   const fcf = cf.rows.map(r => r.fcf);
   const npv = MTF.npv(wacc, fcf);
@@ -141,23 +145,25 @@ MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears) {
   }));
   const valid = dscr.filter(d => d.value !== null).map(d => d.value);
 
-  const buildBase = capex.groups.build + capex.groups.equip;
   const exits = [];
-  let cum = 0;
-  for (let i = 0; i < cf.rows.length; i++) {
-    cum += cf.rows[i].cfe;
-    const residual = Math.max(0, buildBase * (1 - (i + 1) / MTF.taxes.depreciationYears)) +
-      (herdYears[i] ? herdYears[i].cows * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.7 : 0);
-    const eqValue = residual - debt[i].closing - cf.rows[i].wcBalance;
-    const flows = [];
-    for (let j = 0; j <= i; j++) flows.push(j === 0 ? -funding.equity + cf.rows[j].cfe : cf.rows[j].cfe);
-    flows[flows.length - 1] += eqValue;
-    exits.push({
-      year: p.project.startYear + i,
-      moic: funding.equity > 0 ? (cum + eqValue) / funding.equity : 0,
-      irr: MTF.irr(flows),
-      equityValue: eqValue
-    });
+  if (!skipExits) {
+    const buildBase = capex.groups.build + capex.groups.equip;
+    let cum = 0;
+    for (let i = 0; i < cf.rows.length; i++) {
+      cum += cf.rows[i].cfe;
+      const residual = Math.max(0, buildBase * (1 - (i + 1) / MTF.taxes.depreciationYears)) +
+        (herdYears[i] ? herdYears[i].cows * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.7 : 0);
+      const eqValue = residual - debt[i].closing - cf.rows[i].wcBalance;
+      const flows = [];
+      for (let j = 0; j <= i; j++) flows.push(j === 0 ? -funding.equity + cf.rows[j].cfe : cf.rows[j].cfe);
+      flows[flows.length - 1] += eqValue;
+      exits.push({
+        year: p.project.startYear + i,
+        moic: funding.equity > 0 ? (cum + eqValue) / funding.equity : 0,
+        irr: MTF.irr(flows),
+        equityValue: eqValue
+      });
+    }
   }
 
   return {
@@ -169,15 +175,37 @@ MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears) {
   };
 };
 
+/* Расчётная цепочка на заданном наборе субсидий.
+   Стадо и капзатраты от господдержки не зависят — приходят готовыми
+   и считаются один раз на оба прогона. Обычная функция, не MTF.runModel:
+   рекурсия при повторном прогоне невозможна. */
+function runPipeline(state, herd, capex, subsidies, skipExits) {
+  const p = state.params;
+  const pnl = MTF.calcPnL(p, herd, capex, state.staff, state.opexItems, subsidies);
+  const funding = MTF.calcFunding(p, capex, subsidies);
+  const debt = MTF.calcDebtSchedule(p, funding);
+  const cf = MTF.calcCashFlow(p, pnl, capex, funding, debt);
+  const metrics = MTF.calcMetrics(p, cf, capex, funding, pnl, debt, herd, skipExits);
+  return { pnl: pnl, funding: funding, debt: debt, cf: cf, metrics: metrics };
+}
+
 MTF.runModel = function (state) {
   const p = state.params;
   const herd = MTF.calcHerd(p);
   const capex = MTF.calcCapex(p, state.capexItems);
-  const pnl = MTF.calcPnL(p, herd, capex, state.staff, state.opexItems, state.subsidies);
-  const funding = MTF.calcFunding(p, capex, state.subsidies);
-  const debt = MTF.calcDebtSchedule(p, funding);
-  const cf = MTF.calcCashFlow(p, pnl, capex, funding, debt);
-  const metrics = MTF.calcMetrics(p, cf, capex, funding, pnl, debt, herd);
+
+  const main = runPipeline(state, herd, capex, state.subsidies, false);
+  const pnl = main.pnl, funding = main.funding;
+  const debt = main.debt, cf = main.cf, metrics = main.metrics;
+
+  /* Контрольный прогон без господдержки. Субсидии влияют не только на выручку,
+     но и на ставку кредита через rate_sub, поэтому цепочка пересчитывается
+     целиком, а не вычитанием субсидий из EBITDA.
+     Таблица выходов инвестора здесь не нужна — считается со skipExits. */
+  const noSubsidy = state.subsidies.some(s => s.enabled)
+    ? runPipeline(state, herd, capex,
+        state.subsidies.map(s => Object.assign({}, s, { enabled: false })), true)
+    : null;
 
   // Проверки согласованности вводных
   const checks = [];
@@ -207,6 +235,44 @@ MTF.runModel = function (state) {
   return {
     herd: herd, capex: capex, pnl: pnl, funding: funding,
     debt: debt, cf: cf, metrics: metrics, checks: checks,
+    noSubsidy: noSubsidy,
     conflicts: MTF.checkSubsidyConflicts(state.subsidies)
   };
+};
+
+/* ---------- Влияние господдержки ----------
+   Один набор цифр для документа и для вкладки «Финансирование»,
+   чтобы сравнение нигде не разъезжалось.
+   better — в какую сторону двигается показатель, когда поддержка помогает.
+   Значение null означает «не считается» (нет IRR, окупаемость не достигнута,
+   DSCR без долговой нагрузки) и выводится прочерком. */
+MTF.subsidyImpact = function (res) {
+  if (!res.noSubsidy) return null;
+  const off = res.noSubsidy, on = res;
+  const fin = v => (v === null || v === undefined || !isFinite(v)) ? null : v;
+  const pct = v => v === null || v === undefined ? null : fin(v * 100);
+  /* Средняя EBITDA за весь горизонт, а не за последний год.
+     Меры поддержки заканчиваются раньше конца расчёта, и показатель
+     за последний год совпал бы в обоих сценариях до копейки —
+     в документе это читалось бы как «поддержка на EBITDA не влияет». */
+  const avgEbitda = pnl => pnl.length
+    ? fin(pnl.reduce((a, y) => a + y.ebitda, 0) / pnl.length)
+    : null;
+
+  return [
+    { id: 'npv', label: 'NPV', unit: 'тыс. ₸', d: 0, better: 'up',
+      off: fin(off.metrics.npv), on: fin(on.metrics.npv) },
+    { id: 'irr', label: 'IRR проекта', unit: '%', d: 1, better: 'up', diffUnit: 'п.п.',
+      off: pct(off.metrics.irr), on: pct(on.metrics.irr) },
+    { id: 'payback', label: 'Простая окупаемость', unit: 'лет', d: 1, better: 'down',
+      off: fin(off.metrics.payback), on: fin(on.metrics.payback) },
+    { id: 'dscr', label: 'Минимальный DSCR', unit: '', d: 2, better: 'up',
+      off: fin(off.metrics.minDscr), on: fin(on.metrics.minDscr) },
+    { id: 'ebitda', label: 'Средняя EBITDA за период', unit: 'тыс. ₸', d: 0, better: 'up',
+      off: avgEbitda(off.pnl), on: avgEbitda(on.pnl) },
+    { id: 'support', label: 'Объём господдержки за период', unit: 'тыс. ₸', d: 0, better: 'up',
+      off: 0, on: on.pnl.reduce((a, y) => a + y.subsidy, 0) }
+  ].map(r => Object.assign(r, {
+    diff: (r.off === null || r.on === null) ? null : r.on - r.off
+  }));
 };
