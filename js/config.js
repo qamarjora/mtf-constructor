@@ -93,7 +93,7 @@ MTF.defaults = {
     dmPriceYoung: 60,
     landMode: 'perHead',     // fixed | perHead
     landHa: 1000,
-    landHaPerCow: 2.1,
+    landHaPerCow: 1.5,
     landCostPerHa: 220000,
     lumpAnnual: 0            // фиксированная сумма в год, тыс. ₸
   },

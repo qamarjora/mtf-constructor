@@ -11,10 +11,6 @@
 
 window.MTF = window.MTF || {};
 
-/* Площадь кормовых угодий на одну корову, га.
-   Укрупнённый норматив: 1,5 на богаре средней урожайности. */
-MTF.landPerCow = 1.5;
-
 /* Парк техники.
    price   — цена за единицу в тыс. евро
    perFarm — сколько единиц нужно, если у каждой фермы свой парк
@@ -44,7 +40,10 @@ MTF.machinery = [
 MTF.calcMachinery = function (p, res) {
   const N = p.project.farmsCount || 1;
   const cows = (res && res.herd && res.herd.meta) ? res.herd.meta.target : 0;
-  const landPerFarm = Math.round(cows * MTF.landPerCow);
+  /* Норматив земли — общий с кормовой моделью (params.feed.landHaPerCow),
+     иначе документ называл бы две разные площади угодий. */
+  const landPerCow = p.feed.landHaPerCow || 0;
+  const landPerFarm = Math.round(cows * landPerCow);
   const rate = MTF.rate(p, 'EUR');
 
   const rows = MTF.machinery.map(m => {
@@ -66,6 +65,7 @@ MTF.calcMachinery = function (p, res) {
     rows: rows,
     farms: N,
     cowsPerFarm: cows,
+    landPerCow: landPerCow,
     landPerFarm: landPerFarm,
     landTotal: landPerFarm * N,
     sepEur: sepEur,
@@ -86,7 +86,7 @@ MTF.calcMachinery = function (p, res) {
 
   const section = {
     id: 'machinery',
-    title: '12. Машинно-технологический парк',
+    title: '13. Машинно-технологический парк',
     enabled: false,
     body: `Кормовая база проекта требует собственной сельскохозяйственной техники для посева, обработки и уборки кормовых культур. Ниже приведено сравнение двух схем организации парка.
 
@@ -106,7 +106,7 @@ MTF.calcMachinery = function (p, res) {
 
 {{machinerySummaryTable}}
 
-Единый парк сокращает капитальные затраты проекта на технику примерно вдвое. Экономия достигается прежде всего на уборочной технике и агрегатах для посева, которые задействованы ограниченное число дней в году.
+{{machineryVerdict}}
 
 Условия применимости схемы: расположение площадок в радиусе, допускающем перегон техники в течение суток, и единый центр планирования полевых работ.`
   };
@@ -135,6 +135,11 @@ MTF.calcMachinery = function (p, res) {
     const p = state.params, f = MTF.fmt;
     const M = MTF.calcMachinery(p, res);
 
+    /* Знак ставится по факту: снижение затрат печатается с минусом,
+       рост — с плюсом. Жёсткий минус давал «−-6 010», когда общий парк
+       выходил дороже отдельных. */
+    const signed = v => (v >= 0 ? '−' : '+') + f.num(Math.abs(v));
+
     const tbl = (head, rows) =>
       '<table class="dt"><thead><tr>' +
       head.map((h, i) => '<th' + (i > 0 ? ' class="r"' : '') + '>' + h + '</th>').join('') +
@@ -144,7 +149,7 @@ MTF.calcMachinery = function (p, res) {
 
     t.machineryLandTable = tbl(['Показатель', '1 ферма', M.farms + ' ферм'], [
       ['Фуражных коров, гол.', f.num(M.cowsPerFarm), f.num(M.cowsPerFarm * M.farms)],
-      ['Норматив, га на корову', f.num(MTF.landPerCow, 1), f.num(MTF.landPerCow, 1)],
+      ['Норматив, га на корову', f.num(M.landPerCow, 1), f.num(M.landPerCow, 1)],
       ['Кормовые угодья, га', f.num(M.landPerFarm), f.num(M.landTotal)]
     ]);
 
@@ -162,18 +167,35 @@ MTF.calcMachinery = function (p, res) {
 
     t.machineryTable = tbl(
       ['Наименование', 'Цена, тыс. €', 'Схема 1, ед.', 'Схема 1, тыс. €',
-       'Схема 2, ед.', 'Схема 2, тыс. €'], rows);
+       'Схема 2, ед.', 'Схема 2, тыс. €'], rows) +
+      '\n<p><i>Количества по схеме 2 рассчитаны на проект из 8–10 площадок. ' +
+      'При меньшем числе ферм общий парк недозагружен, и преимущество схемы ' +
+      'сокращается или исчезает.</i></p>';
 
     t.machinerySummaryTable = tbl(['Показатель', 'Схема 1', 'Схема 2', 'Разница'], [
       ['Капитальные затраты на парк, тыс. €',
-        f.num(M.sepEur), f.num(M.shEur), '−' + f.num(M.saveEur)],
+        f.num(M.sepEur), f.num(M.shEur), signed(M.saveEur)],
       ['В пересчёте на одну ферму, тыс. €',
         f.num(M.sepPerFarmEur), f.num(M.shPerFarmEur),
-        '−' + f.num(M.sepPerFarmEur - M.shPerFarmEur)],
+        signed(M.sepPerFarmEur - M.shPerFarmEur)],
       ['Капитальные затраты на парк, тыс. ₸',
-        f.num(M.sepKzt), f.num(M.shKzt), '−' + f.num(M.saveKzt)],
+        f.num(M.sepKzt), f.num(M.shKzt), signed(M.saveKzt)],
       ['<b>Экономия</b>', '—', '—', '<b>' + f.pct(M.savePct, 0) + '</b>']
     ]);
+
+    /* Вывод под таблицей зависит от того, выигрывает ли общий парк.
+       Доля экономии берётся из расчёта, а не фиксируется словом «вдвое»:
+       при пяти фермах выигрыш уже около двух процентов. */
+    t.machineryVerdict = M.saveEur > 0
+      ? 'Единый парк сокращает капитальные затраты проекта на технику на ' +
+        f.pct(M.savePct, 0) + '. Экономия достигается прежде всего на уборочной ' +
+        'технике и агрегатах для посева, которые задействованы ограниченное ' +
+        'число дней в году.'
+      : 'При заданном числе ферм (' + f.num(M.farms) + ') единый парк выигрыша ' +
+        'не даёт: комплект общей техники обходится дороже, чем отдельные парки ' +
+        'на каждой площадке. Схема 1 предпочтительнее. Общий парк начинает ' +
+        'окупаться на проекте из 8–10 ферм, под которые и рассчитаны количества ' +
+        'по схеме 2.';
 
     return t;
   };
