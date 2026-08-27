@@ -30,7 +30,8 @@ MTF.docModes = [
     name: 'Паспорт проекта',
     label: 'Паспорт проекта',
     hint: 'Мощность, объёмы производства, состав затрат. Под инвестиционное субсидирование.',
-    sections: ['concept', 'farm', 'herddyn', 'estimate', 'equipment', 'finmodel', 'stages', 'disclaimer']
+    sections: ['concept', 'farm', 'herddyn', 'estimate', 'equipment', 'finmodel',
+               'subsidycompare', 'stages', 'disclaimer']
   },
   {
     id: 'bizplan',
@@ -38,15 +39,15 @@ MTF.docModes = [
     label: 'Бизнес-план',
     hint: 'Полный формат для кредитора: производство, экономика, финансирование, риски.',
     sections: ['concept', 'farm', 'herddyn', 'estimate', 'equipment', 'stages', 'finmodel',
-               'consolidated', 'operator', 'risks', 'disclaimer']
+               'subsidycompare', 'consolidated', 'operator', 'risks', 'disclaimer']
   },
   {
     id: 'investment',
     name: 'Инвестиционное предложение',
     label: 'Инвестиционное предложение',
     hint: 'Для привлечения инвесторов: доходность, условия участия, ограничения.',
-    sections: ['concept', 'farm', 'deal', 'estimate', 'finmodel', 'consolidated',
-               'operator', 'limits', 'risks', 'disclaimer']
+    sections: ['concept', 'farm', 'deal', 'estimate', 'finmodel', 'subsidycompare',
+               'consolidated', 'operator', 'limits', 'risks', 'disclaimer']
   },
   {
     id: 'custom',
@@ -56,6 +57,28 @@ MTF.docModes = [
     sections: null
   }
 ];
+
+/* Слияние сохранённого набора разделов с текущим.
+   Правки текста и галочки пользователя сохраняются, разделы, добавленные
+   в новой версии инструмента, подставляются на своё место — иначе старый
+   .json навсегда прятал бы новые разделы. Заголовки берутся из кода:
+   вручную они не правятся, а нумерация в них меняется между версиями. */
+MTF.mergeDocSections = function (saved) {
+  const base = JSON.parse(JSON.stringify(MTF.docSections));
+  if (!Array.isArray(saved) || !saved.length) return base;
+  const byId = {};
+  saved.forEach(s => { if (s && s.id) byId[s.id] = s; });
+  const merged = base.map(b => {
+    const s = byId[b.id];
+    if (!s) return b;
+    return { id: b.id, title: b.title, enabled: !!s.enabled, body: s.body || b.body };
+  });
+  // разделы, которых в текущем наборе нет — добавленные пользователем, не теряем
+  saved.forEach(s => {
+    if (s && s.id && !base.some(b => b.id === s.id)) merged.push(s);
+  });
+  return merged;
+};
 
 MTF.applyDocMode = function (state, modeId) {
   const m = MTF.docModes.find(x => x.id === modeId);
@@ -210,13 +233,21 @@ MTF.docSections = [
 {{subsidyTable}}`
   },
   {
-    id: 'consolidated', title: '8. Консолидация по проекту', enabled: false,
+    id: 'subsidycompare', title: '8. Сравнение сценариев с господдержкой и без', enabled: false,
+    body: `Проект просчитан в двух вариантах: с учётом включённых мер государственной поддержки и полностью без них. Базовый сценарий без субсидий показывает, выдерживает ли проект нагрузку самостоятельно, если условия субсидирования изменятся или заявка не пройдёт.
+
+Второй вариант пересчитан целиком, а не уменьшением выручки на сумму субсидий: меры поддержки влияют и на ставку вознаграждения по кредиту, а через неё — на график погашения, денежные потоки и покрытие долга.
+
+{{subsidyComparisonTable}}`
+  },
+  {
+    id: 'consolidated', title: '9. Консолидация по проекту', enabled: false,
     body: `Показатели проекта в целом при реализации {{farmsCount}} ферм.
 
 {{consolidatedTable}}`
   },
   {
-    id: 'operator', title: '9. Роль Оператора', enabled: true,
+    id: 'operator', title: '10. Роль Оператора', enabled: true,
     body: `Оператор проекта выполняет функцию единого центра управления:
 
 - Подготовка проекта: ПСД, экспертиза, земельные вопросы, разрешительная документация
@@ -233,7 +264,7 @@ MTF.docSections = [
 - Возможность участия без операционного опыта в животноводстве`
   },
   {
-    id: 'limits', title: '10. Ограничения и обязательства инвестора', enabled: false,
+    id: 'limits', title: '11. Ограничения и обязательства инвестора', enabled: false,
     body: `**8.1.** Ограничение на выход из проекта — на стадии строительства до ввода в эксплуатацию, на операционной стадии — не менее 3 лет с даты запуска фермы.
 
 **8.2.** Ограничение распоряжения активами — отчуждение, залог (кроме финансирующих организаций) и аренда фермы требуют согласия Оператора.
@@ -243,7 +274,7 @@ MTF.docSections = [
 **8.4.** Ограничение конкуренции и запрет на привлечение персонала — в течение срока участия и 3 лет после его прекращения.`
   },
   {
-    id: 'risks', title: '11. Риски и их снижение', enabled: true,
+    id: 'risks', title: '12. Риски и их снижение', enabled: true,
     body: `**Производственные риски** — падёж, снижение продуктивности, проблемы воспроизводства. Снижение: ветеринарный контроль, квалифицированный персонал, страхование поголовья.
 
 **Рыночные риски** — снижение закупочной цены на молоко, рост стоимости кормов. Снижение: долгосрочные договоры с переработчиками, формирование кормовых запасов.
@@ -412,6 +443,16 @@ MTF.docTables = function (state, res) {
         state.subsidies.filter(s => s.enabled).map(s =>
           [s.name, f.num(s.value, 1) + ' ' + s.unit, 'годы ' + s.yearFrom + '–' + s.yearTo]))
       : '<p><i>Меры государственной поддержки в расчёте не учитывались.</i></p>',
+    subsidyComparisonTable: (function () {
+      const imp = MTF.subsidyImpact(res);
+      if (!imp) return '<p><i>Меры государственной поддержки в расчёте не учитывались, ' +
+        'сравнивать не с чем.</i></p>';
+      return dt(['Показатель', 'Без субсидий', 'С субсидиями', 'Разница'],
+        imp.map(r => {
+          const t = f.impact(r);
+          return [r.label + (r.unit && r.unit !== '%' ? ', ' + r.unit : ''), t.off, t.on, t.diff];
+        }));
+    })(),
     consolidatedTable: dt(['Показатель', '1 ферма', N + ' ферм'], [
       ['Стоимость проекта, тыс. ₸', f.num(res.capex.total), f.num(res.capex.total * N)],
       ['Собственное участие, тыс. ₸', f.num(fd.equity), f.num(fd.equity * N)],

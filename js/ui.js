@@ -18,7 +18,25 @@ MTF.fmt = {
       maximumFractionDigits: d === undefined ? 1 : d
     }) + '%';
   },
-  x: function (v) { return v === null || isNaN(v) ? '—' : v.toFixed(1) + 'x'; }
+  x: function (v) { return v === null || isNaN(v) ? '—' : v.toFixed(1) + 'x'; },
+
+  /* Строка из MTF.subsidyImpact в готовый текст.
+     good — стало ли лучше от господдержки, null если сравнивать нечего. */
+  impact: function (r) {
+    const one = v => v === null ? '—'
+      : (r.unit === '%' ? MTF.fmt.pct(v, r.d) : MTF.fmt.num(v, r.d));
+    let diff = '—';
+    if (r.diff !== null) {
+      const abs = Math.abs(r.diff);
+      const body = r.diffUnit ? MTF.fmt.num(abs, r.d) + ' ' + r.diffUnit
+        : (r.unit === '%' ? MTF.fmt.pct(abs, r.d) : MTF.fmt.num(abs, r.d));
+      diff = (r.diff > 0 ? '+' : r.diff < 0 ? '−' : '') + body;
+    }
+    return {
+      off: one(r.off), on: one(r.on), diff: diff,
+      good: (r.diff === null || r.diff === 0) ? null : ((r.diff > 0) === (r.better === 'up'))
+    };
+  }
 };
 
 MTF.state = null;
@@ -508,6 +526,21 @@ MTF.renderFin = function (res) {
     (e.irr !== null ? f.pct(e.irr * 100) : '—') + '</td>' +
     '<td class="n">' + f.num(e.equityValue) + '</td></tr>').join('');
 
+  const impact = (function () {
+    const imp = MTF.subsidyImpact(res);
+    const head = '<div class="card" style="margin-bottom:14px"><h3>Влияние господдержки</h3>';
+    if (!imp) return head + '<div class="note">Все меры поддержки выключены — ' +
+      'расчёт идёт в одном сценарии, сравнивать не с чем.</div></div>';
+    return head + '<div class="kpis">' + imp.map(r => {
+      const t = f.impact(r);
+      return kpi(r.label + (r.unit && r.unit !== '%' ? ', ' + r.unit : ''), t.diff,
+        'без ' + t.off + ' → с ' + t.on,
+        t.good === null ? '' : (t.good ? 'good' : 'bad'));
+    }).join('') + '</div>' +
+      '<div class="hint">Сценарий без поддержки пересчитан целиком: сняты и субсидии ' +
+      'в выручке, и снижение ставки по кредиту.</div></div>';
+  })();
+
   const N = P.project.farmsCount, lastH = res.herd[res.herd.length - 1];
 
   const scen = MTF.scenarios.length
@@ -540,6 +573,8 @@ MTF.renderFin = function (res) {
     kpi('Дисконт. окупаемость', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—', 'лет') +
     kpi('Мин. DSCR', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—', '', m.minDscr >= 1.2 ? 'good' : 'bad') +
     '</div>' +
+
+    impact +
 
     '<div class="row"><button class="btn pri" id="saveScen">Сохранить как сценарий</button>' +
     (MTF.scenarios.length ? '<button class="btn" id="clearScen">Очистить сравнение</button>' : '') + '</div>' +
@@ -801,7 +836,7 @@ MTF.load = function () {
       staff: Array.isArray(o.staff) ? o.staff : base.staff,
       opexItems: Array.isArray(o.opexItems) ? o.opexItems : base.opexItems,
       subsidies: Array.isArray(o.subsidies) && o.subsidies.length ? o.subsidies : base.subsidies,
-      docSections: Array.isArray(o.docSections) && o.docSections.length ? o.docSections : base.docSections,
+      docSections: MTF.mergeDocSections(o.docSections),
       docMode: o.docMode || 'estimate',
       version: MTF.VERSION
     };
