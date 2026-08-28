@@ -37,7 +37,11 @@ MTF.machinery = [
 ];
 
 /* ---------- Расчёт ---------- */
-MTF.calcMachinery = function (p, res) {
+MTF.calcMachinery = function (p, res, list) {
+  /* Список берётся из состояния — его правит карточка на вкладке «Экономика».
+     Явный аргумент нужен для расчётов «а если», MTF.machinery — запасной
+     вариант, пока состояние ещё не создано. */
+  const items = list || (MTF.state && MTF.state.machinery) || MTF.machinery;
   const N = p.project.farmsCount || 1;
   const cows = (res && res.herd && res.herd.meta) ? res.herd.meta.target : 0;
   /* Норматив земли — общий с кормовой моделью (params.feed.landHaPerCow),
@@ -46,7 +50,7 @@ MTF.calcMachinery = function (p, res) {
   const landPerFarm = Math.round(cows * landPerCow);
   const rate = MTF.rate(p, 'EUR');
 
-  const rows = MTF.machinery.map(m => {
+  const rows = items.map(m => {
     const sepQty = m.perFarm * N;
     const sepEur = m.price * sepQty;
     const shEur = m.price * m.shared;
@@ -198,5 +202,142 @@ MTF.calcMachinery = function (p, res) {
         'по схеме 2.';
 
     return t;
+  };
+})();
+
+
+/* ============================================================
+   ПАРК В СОСТОЯНИИ ПРОЕКТА
+   Список правится на вкладке «Экономика» и сохраняется вместе
+   с проектом. ui.js не трогаем — оборачиваем его функции.
+   ============================================================ */
+(function () {
+  if (!MTF.initState) return;
+
+  MTF.ensureMachinery = function (state) {
+    if (!Array.isArray(state.machinery) || !state.machinery.length) {
+      state.machinery = JSON.parse(JSON.stringify(MTF.machinery));
+    }
+    return state.machinery;
+  };
+
+  const origInit = MTF.initState;
+  MTF.initState = function () {
+    const st = origInit();
+    st.machinery = JSON.parse(JSON.stringify(MTF.machinery));
+    return st;
+  };
+
+  /* Проект, сохранённый до появления модуля, парка не содержит —
+     подставляем заводской. Открытие .json закрыто в export.js. */
+  const origLoad = MTF.load;
+  MTF.load = function () {
+    const st = origLoad();
+    if (st) MTF.ensureMachinery(st);
+    return st;
+  };
+})();
+
+
+/* ============================================================
+   КАРТОЧКА ПАРКА НА ВКЛАДКЕ «ЭКОНОМИКА»
+   Добавляется поверх renderEcon и bind без правки ui.js.
+   ============================================================ */
+(function () {
+  if (!MTF.renderEcon) return;
+
+  // названия и группы вводит пользователь — кавычка в значении сломала бы атрибут
+  const esc = v => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+  MTF.renderMachineryCard = function (res) {
+    const P = MTF.state.params, f = MTF.fmt;
+    const list = MTF.ensureMachinery(MTF.state);
+    const M = MTF.calcMachinery(P, res);
+    const N = P.project.farmsCount || 1;
+
+    const groups = [];
+    list.forEach(m => { if (groups.indexOf(m.group) < 0) groups.push(m.group); });
+
+    const rows = groups.map(g =>
+      '<tr class="sub"><td colspan="8"><b>' + esc(g) + '</b></td></tr>' +
+      list.map((m, i) => [m, i]).filter(x => x[0].group === g).map(x => {
+        const m = x[0], i = x[1];
+        return '<tr>' +
+          '<td><input type="text" data-mn="' + i + '" value="' + esc(m.name) +
+            '" style="width:100%;text-align:left"></td>' +
+          '<td><input type="text" data-mg="' + i + '" value="' + esc(m.group) +
+            '" style="width:104px;text-align:left"></td>' +
+          '<td><input type="number" data-mp="' + i + '" value="' + m.price + '" step="any" style="width:84px"></td>' +
+          '<td><input type="number" data-mf="' + i + '" value="' + m.perFarm + '" step="any" style="width:62px"></td>' +
+          '<td><input type="number" data-ms="' + i + '" value="' + m.shared + '" step="any" style="width:62px"></td>' +
+          '<td class="n">' + f.num(m.price * m.perFarm * N, 1) + '</td>' +
+          '<td class="n">' + f.num(m.price * m.shared, 1) + '</td>' +
+          '<td><button class="del" data-mdel="' + i + '">×</button></td></tr>';
+      }).join('')).join('');
+
+    /* Тот же вывод, что и в документе: при малом числе ферм общий парк
+       проигрывает, и карточка обязана это показывать, а не обещать экономию. */
+    const verdict = M.saveEur > 0
+      ? '<div class="note ok">Единый парк дешевле на <b>' + f.num(M.saveEur, 1) +
+        ' тыс. €</b> — это ' + f.pct(M.savePct, 0) + ' от затрат по схеме 1.</div>'
+      : '<div class="note warn">При ' + f.num(N) + ' фермах единый парк дороже на <b>' +
+        f.num(Math.abs(M.saveEur), 1) + ' тыс. €</b>. Количества по схеме 2 рассчитаны ' +
+        'на 8–10 площадок; при меньшем числе ферм парк недозагружен.</div>';
+
+    return '<div class="card" style="margin-top:14px"><h3>Машинно-технологический парк</h3>' +
+      verdict +
+      '<div class="tw"><table><thead><tr>' +
+      '<th>Наименование</th><th>Группа</th><th>Цена, тыс. €</th>' +
+      '<th>Сх. 1, ед.</th><th>Сх. 2, ед.</th>' +
+      '<th>Сх. 1, тыс. €</th><th>Сх. 2, тыс. €</th><th></th></tr></thead><tbody>' +
+      rows +
+      '<tr class="tot"><td>Итого</td><td></td><td></td><td></td><td></td>' +
+      '<td class="n">' + f.num(M.sepEur, 1) + '</td>' +
+      '<td class="n">' + f.num(M.shEur, 1) + '</td><td></td></tr>' +
+      '<tr class="sub"><td>На одну ферму</td><td></td><td></td><td></td><td></td>' +
+      '<td class="n">' + f.num(M.sepPerFarmEur, 1) + '</td>' +
+      '<td class="n">' + f.num(M.shPerFarmEur, 1) + '</td><td></td></tr>' +
+      '<tr class="sub"><td>В тенге, тыс.</td><td></td><td></td><td></td><td></td>' +
+      '<td class="n">' + f.num(M.sepKzt) + '</td>' +
+      '<td class="n">' + f.num(M.shKzt) + '</td><td></td></tr>' +
+      '</tbody></table></div>' +
+      '<button class="btn" id="addMach" style="margin-top:10px">Добавить позицию</button>' +
+      '<div class="hint">Схема 1 — свой парк у каждой из ' + f.num(N) + ' ферм. ' +
+      'Схема 2 — единый парк на весь проект. Кормовые угодья: ' +
+      f.num(M.landPerFarm) + ' га на ферму, ' + f.num(M.landTotal) + ' га всего ' +
+      '(норматив ' + f.num(M.landPerCow, 1) + ' га на корову с вкладки «Вводные»).</div></div>';
+  };
+
+  const origEcon = MTF.renderEcon;
+  MTF.renderEcon = function (res) {
+    return origEcon(res) + MTF.renderMachineryCard(res);
+  };
+
+  const origBind = MTF.bind;
+  MTF.bind = function () {
+    origBind();
+    const list = MTF.ensureMachinery(MTF.state);
+    const upd = () => { MTF.save(); MTF.render(); };
+    const on = (sel, fn) => document.querySelectorAll(sel).forEach(el =>
+      el.onchange = () => { fn(el); upd(); });
+
+    on('[data-mn]', el => list[el.dataset.mn].name = el.value);
+    on('[data-mg]', el => list[el.dataset.mg].group = el.value);
+    on('[data-mp]', el => list[el.dataset.mp].price = parseFloat(el.value) || 0);
+    on('[data-mf]', el => list[el.dataset.mf].perFarm = parseFloat(el.value) || 0);
+    on('[data-ms]', el => list[el.dataset.ms].shared = parseFloat(el.value) || 0);
+
+    document.querySelectorAll('[data-mdel]').forEach(el =>
+      el.onclick = () => { list.splice(+el.dataset.mdel, 1); upd(); });
+
+    const add = document.getElementById('addMach');
+    if (add) add.onclick = () => {
+      const n = prompt('Название позиции');
+      if (!n) return;
+      const g = prompt('Группа (Уборка / Тяга / Обработка)', 'Уборка') || 'Прочее';
+      list.push({ id: 'm' + Date.now(), name: n, group: g, price: 0, perFarm: 1, shared: 1 });
+      upd();
+    };
   };
 })();
