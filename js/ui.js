@@ -503,7 +503,12 @@ MTF.renderFin = function (res) {
     ? '<div class="note err"><b>Оборотного кредита не хватает.</b> Лимит ' + f.num(res.cf.wcCap) +
       ' тыс. ₸ исчерпан — дефицит нечем закрыть. Нужно больше собственных средств или пересмотр параметров.</div>' : '';
   const dscrBad = m.minDscr < 1.2 && isFinite(m.minDscr)
-    ? '<div class="note warn">Минимальный DSCR ' + m.minDscr.toFixed(2) + '. Кредиторы обычно требуют не ниже 1,2.</div>' : '';
+    ? '<div class="note warn">Минимальный DSCR ' + m.minDscr.toFixed(2) +
+      '. Кредиторы обычно требуют не ниже 1,2.' +
+      (isFinite(m.minDscrY2) && m.minDscrY2 >= 1.2
+        ? ' Со второго года покрытие выходит на ' + m.minDscrY2.toFixed(2) +
+          ' — просадка приходится на пусконаладочный год.'
+        : '') + '</div>' : '';
 
   const debtRows = res.debt.map((d, i) =>
     '<tr><td class="n">' + d.year + '</td><td class="n">' + f.num(d.opening) + '</td>' +
@@ -571,8 +576,16 @@ MTF.renderFin = function (res) {
       m.irr !== null && m.irr * 100 > P.finance.wacc ? 'good' : 'bad') +
     kpi('Окупаемость', m.payback ? m.payback.toFixed(1) : '—', 'лет') +
     kpi('Дисконт. окупаемость', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—', 'лет') +
-    kpi('Мин. DSCR', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—', '', m.minDscr >= 1.2 ? 'good' : 'bad') +
+    kpi('Мин. DSCR', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—', 'весь горизонт',
+      m.minDscr >= 1.2 ? 'good' : 'bad') +
+    kpi('Мин. DSCR со 2-го года', isFinite(m.minDscrY2) ? m.minDscrY2.toFixed(2) : '—',
+      'без пусконаладки', m.minDscrY2 >= 1.2 ? 'good' : 'bad') +
     '</div>' +
+
+    '<div class="hint" style="margin:-6px 0 14px">Второй показатель не учитывает ' +
+    'первый год проекта: идут пусконаладка и наполнение стада, обслуживать долг ' +
+    'уже нужно, а проектного удоя ещё нет. Кредиторы обычно смотрят на покрытие ' +
+    'в рабочем режиме, но требование не ниже 1,2 формально относится ко всему сроку.</div>' +
 
     impact +
 

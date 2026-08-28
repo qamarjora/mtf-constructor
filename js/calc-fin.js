@@ -144,6 +144,11 @@ MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears, skipExi
     value: cf.rows[i].debtService > 0 ? y.ebitda / cf.rows[i].debtService : null
   }));
   const valid = dscr.filter(d => d.value !== null).map(d => d.value);
+  /* Отдельный минимум без первого года: там пусконаладка и неполная загрузка
+     стада, долговая нагрузка уже есть, а проектного удоя ещё нет. Общий
+     минимум почти всегда приходится именно на него и мало говорит
+     о способности проекта обслуживать долг в рабочем режиме. */
+  const validY2 = dscr.filter((d, i) => i > 0 && d.value !== null).map(d => d.value);
 
   const exits = [];
   if (!skipExits) {
@@ -171,6 +176,7 @@ MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears, skipExi
     payback: MTF.payback(fcf), discountedPayback: MTF.payback(fcf, wacc),
     dscr: dscr,
     minDscr: valid.length ? Math.min.apply(null, valid) : Infinity,
+    minDscrY2: validY2.length ? Math.min.apply(null, validY2) : Infinity,
     exits: exits
   };
 };

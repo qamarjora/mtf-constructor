@@ -367,8 +367,11 @@ MTF.docTables = function (state, res) {
       ['IRR проекта', '%', m.irr !== null ? f.pct(m.irr * 100) : '—'],
       ['Простая окупаемость', 'лет', m.payback ? m.payback.toFixed(1) : '—'],
       ['Дисконтированная окупаемость', 'лет', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—'],
-      ['Минимальный DSCR', '', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—']
-    ]),
+      ['Минимальный DSCR за весь срок', '', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—'],
+      ['Минимальный DSCR со 2-го года', '', isFinite(m.minDscrY2) ? m.minDscrY2.toFixed(2) : '—']
+    ]) + '\n<p><i>Минимальный DSCR со второго года рассчитан без учёта первого года ' +
+      'проекта: в нём проходят пусконаладка и наполнение стада, обслуживание долга ' +
+      'уже началось, а выход на проектную продуктивность ещё нет.</i></p>',
     estimateTotalTable: (function () {
       const N = p.project.farmsCount, P = p.production, tgt = res.herd.meta.target;
       const need = tgt * P.cullRate / 100;

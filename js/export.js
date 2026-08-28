@@ -108,7 +108,8 @@ MTF.export.expCsv = function () {
   add(['NPV', Math.round(r.metrics.npv)]);
   add(['IRR проекта, %', r.metrics.irr !== null ? (r.metrics.irr * 100).toFixed(1) : '']);
   add(['Окупаемость, лет', r.metrics.payback ? r.metrics.payback.toFixed(1) : '']);
-  add(['Мин. DSCR', isFinite(r.metrics.minDscr) ? r.metrics.minDscr.toFixed(2) : '']);
+  add(['Мин. DSCR за весь срок', isFinite(r.metrics.minDscr) ? r.metrics.minDscr.toFixed(2) : '']);
+  add(['Мин. DSCR со 2-го года', isFinite(r.metrics.minDscrY2) ? r.metrics.minDscrY2.toFixed(2) : '']);
   add(['Собственное участие', Math.round(r.funding.equity)]);
   add(['Лимит займа', Math.round(r.funding.loanTotal)]);
 
