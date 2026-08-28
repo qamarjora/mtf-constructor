@@ -33,7 +33,9 @@
   article table{border-collapse:collapse;width:100%;margin:14px 0 18px;font-size:13.5px}
   article th{background:var(--dark);color:#F2F2EE;padding:9px 12px;text-align:left;font-size:11px;
     text-transform:uppercase;letter-spacing:.05em;font-weight:600}
-  article td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top;line-height:1.6}
+  /* text-align:left против th,td{text-align:right} из style.css: там таблицы
+     числовые, здесь в ячейках проза. Числовые .n ниже остаются правыми. */
+  article td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:top;line-height:1.6;text-align:left}
   article td:first-child{color:var(--ink);font-weight:500}
   article tbody tr:nth-child(even){background:var(--surface-2)}
   /* style.css задаёт th,td{white-space:nowrap} под числовые таблицы
