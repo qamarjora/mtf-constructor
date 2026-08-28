@@ -6,8 +6,13 @@
 <title>Справочник — Конструктор модели МТФ</title>
 <link rel="stylesheet" href="css/style.css">
 <style>
-  .wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:250px 1fr;gap:16px;align-items:start}
-  .side{position:sticky;top:96px;max-height:calc(100vh-120px);overflow-y:auto}
+  /* minmax(0,1fr), а не 1fr: иначе колонка не может стать уже своего
+     min-content, и широкая таблица распирает страницу за вьюпорт */
+  .wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
+  /* Меню — это <nav>, а style.css задаёт nav{display:flex;overflow-x:auto}
+     под ленту вкладок конструктора. Здесь ссылки должны идти столбцом,
+     поэтому перебиваем; сам style.css трогать нельзя. */
+  .side{display:block;overflow-x:visible;position:sticky;top:96px;max-height:calc(100vh-120px);overflow-y:auto}
   .side a{display:block;padding:7px 0;font-size:13px;color:var(--ink-2);text-decoration:none;border-bottom:1px solid var(--line)}
   .side a:hover{color:var(--ink)}
   .side a.h{font-weight:600;color:var(--ink);margin-top:14px;border-bottom:1px solid var(--line-2)}
@@ -50,11 +55,16 @@
   .field dt{font-weight:600;color:var(--ink);margin-top:10px;font-size:13px}
   .field dd{margin:2px 0 0;color:var(--ink-2);line-height:1.65}
 
+  /* Таблицы наследуют th,td{white-space:nowrap} из style.css и потому шире
+     колонки — прокручиваем их внутри обёртки, а не всю страницу.
+     Отступы обнуляем: .tw в style.css свёрстан под padding карточки 22px. */
+  article .tw{overflow-x:auto;margin:0;padding:0}
+
   .lead{font-size:16px;line-height:1.75;color:var(--ink-2)}
   .back{display:inline-block;padding:9px 18px;background:var(--dark);color:#F2F2EE;
     border-radius:99px;text-decoration:none;font-size:12.5px;margin-bottom:14px}
   @media(max-width:900px){
-    .wrap{grid-template-columns:1fr}
+    .wrap{grid-template-columns:minmax(0,1fr)}
     .side{position:static;max-height:none}
     article{padding:22px 20px}
   }
@@ -134,6 +144,8 @@
 
   <p>Ферма — это не одно здание, а несколько помещений под разные группы животных. Каждая группа требует своих условий, кормления и ухода.</p>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Зона</th><th>Кто там</th><th>Сколько времени</th><th>Зачем отдельно</th></tr></thead>
     <tbody>
@@ -146,6 +158,7 @@
       <tr><td>Карантин</td><td>Завозное поголовье</td><td>30 дней</td><td>Не занести инфекцию в стадо. Требование ветслужбы</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box term">
     <span class="t">Скотоместо</span>
@@ -180,6 +193,8 @@
 
   <h3 id="slovar">Словарь терминов</h3>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Термин</th><th>Что означает</th><th>Почему важно</th></tr></thead>
     <tbody>
@@ -200,6 +215,7 @@
       <tr><td>Сексированное семя</td><td>Семя, отсортированное так, что рождаются в основном тёлочки</td><td>Ускоряет рост стада своим воспроизводством</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box warn">
     <span class="t">Три цифры удоя, которые часто путают</span>
@@ -216,6 +232,8 @@
 
   <p>Доля дойных считается так: если межотёльный период 468 дней, а сухостой 60 дней плюс родилка 14, то не доится <code>74 / 468 = 16%</code> стада, доится 84%. Это соотношение нельзя изменить приказом — только через управление воспроизводством.</p>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Группа</th><th>Доля / количество</th><th>Как считается</th></tr></thead>
     <tbody>
@@ -226,6 +244,7 @@
       <tr><td>Ремонтный молодняк</td><td>~48% фуражного</td><td>Потребность в нетелях × 22 месяца ÷ 12</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box err">
     <span class="t">Частая ошибка новичка</span>
@@ -240,6 +259,8 @@
 
   <h3 id="dohod">Доходы</h3>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Источник</th><th>Доля выручки</th><th>Комментарий</th></tr></thead>
     <tbody>
@@ -249,6 +270,7 @@
       <tr><td>Откорм бычков</td><td>до 15%</td><td>Только если есть площадка и корма</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box why">
     <span class="t">Почему цена молока — самый важный параметр</span>
@@ -257,6 +279,8 @@
   </div>
 
   <h3 id="rashod">Расходы</h3>
+
+  <div class="tw">
 
   <table>
     <thead><tr><th>Статья</th><th>Доля затрат</th><th>Комментарий</th></tr></thead>
@@ -269,6 +293,7 @@
       <tr><td>Покупка нетелей</td><td>0–20%</td><td>Только если нет своего ремонта. Тогда это вечная статья</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box term">
     <span class="t">Себестоимость литра</span>
@@ -300,6 +325,8 @@
 
   <p>В Казахстане молочное животноводство поддерживается государством по нескольким направлениям. Точные ставки и правила меняются приказами, поэтому в конструкторе они помечены статусом «проверить».</p>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Тип поддержки</th><th>Как работает</th><th>На что влияет</th></tr></thead>
     <tbody>
@@ -310,6 +337,7 @@
       <tr><td>Субсидирование ставки</td><td>Снижение процента по кредиту</td><td>Стоимость обслуживания долга</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box why">
     <span class="t">Зачем конструктор считает два сценария</span>
@@ -704,6 +732,7 @@
   <div class="field">
     <div class="fname">СВ на голову</div>
     <div class="fmeta">кг сухого вещества в сутки</div>
+    <div class="tw">
     <table>
       <thead><tr><th>Группа</th><th>Норма</th><th>Комментарий</th></tr></thead>
       <tbody>
@@ -714,6 +743,7 @@
         <tr><td>Бычок на откорме</td><td class="n">8–10</td><td>Высокая доля концентратов</td></tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <div class="field">
@@ -734,6 +764,7 @@
     <div class="fname">Га на фуражную корову</div>
     <div class="fmeta">гектаров · при своей кормовой базе</div>
     <p>Площадь пашни, нужная для обеспечения одной коровы кормами вместе со шлейфом.</p>
+    <div class="tw">
     <table>
       <thead><tr><th>Условия</th><th>Га на корову</th></tr></thead>
       <tbody>
@@ -743,6 +774,7 @@
         <tr><td>Только объёмистые корма, зерно покупное</td><td class="n">0,8–1,2</td></tr>
       </tbody>
     </table>
+    </div>
     <dl>
       <dt>Не забыть про севооборот</dt>
       <dd>Люцерна занимает поле 3–4 года, кукуруза требует чередования, часть земли под паром. Реальная потребность на 20–25% больше расчётной.</dd>
@@ -819,6 +851,8 @@
 
   <p>Капзатраты — это единовременные вложения в создание фермы, в отличие от операционных, которые повторяются каждый год. Разделены на четыре группы, у каждой своя валюта отображения и свой процент финансирования кредитом.</p>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Группа</th><th>Что входит</th><th>Обычная доля</th></tr></thead>
     <tbody>
@@ -828,6 +862,7 @@
       <tr><td>Поголовье</td><td>Закуп нетелей</td><td>15–25%</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box warn">
     <span class="t">Как проверить смету на здравый смысл</span>
@@ -919,6 +954,7 @@
     <div class="fname">Численность персонала</div>
     <div class="fmeta">ориентир</div>
     <p>4–7 человек на 100 коров с учётом молодняка и вспомогательных служб. Типовой состав фермы на 475 голов:</p>
+    <div class="tw">
     <table>
       <thead><tr><th>Должность</th><th>Кол-во</th><th>Зачем</th></tr></thead>
       <tbody>
@@ -934,6 +970,7 @@
         <tr><td>Охрана</td><td class="n">4</td><td>Круглосуточно</td></tr>
       </tbody>
     </table>
+    </div>
     <p>Начисления на ФОТ 35% сверх суммы на руки — налоги и социальные отчисления.</p>
   </div>
 
@@ -1061,6 +1098,8 @@
 
   <p><b>NPV</b> — вся будущая прибыль проекта, пересчитанная в сегодняшние деньги, минус вложения.</p>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Значение</th><th>Что означает</th></tr></thead>
     <tbody>
@@ -1069,6 +1108,7 @@
       <tr><td>NPV меньше нуля</td><td>Проект менее выгоден, чем альтернатива. Не обязательно убыточен — просто хуже</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box warn">
     <span class="t">Чем NPV чувствителен</span>
@@ -1120,6 +1160,8 @@
 
   <p>Во сколько раз годовая EBITDA покрывает годовой платёж по кредиту.</p>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Значение</th><th>Что означает</th></tr></thead>
     <tbody>
@@ -1129,6 +1171,7 @@
       <tr><td>Выше 1,5</td><td>Комфортный запас</td></tr>
     </tbody>
   </table>
+  </div>
 
   <div class="box why">
     <span class="t">Почему кредитор смотрит именно на DSCR</span>
@@ -1187,6 +1230,8 @@
 
   <h3 id="diag">Диагностика проблем</h3>
 
+  <div class="tw">
+
   <table>
     <thead><tr><th>Симптом</th><th>Причина</th><th>Что делать</th></tr></thead>
     <tbody>
@@ -1202,8 +1247,11 @@
       <tr><td>Доля стройки меньше 30%</td><td>Строительство недооценено</td><td>Запросить КП подрядчиков</td></tr>
     </tbody>
   </table>
+  </div>
 
   <h3 id="norms">Нормативы для быстрой сверки</h3>
+
+  <div class="tw">
 
   <table>
     <thead><tr><th>Показатель</th><th>Норма</th></tr></thead>
@@ -1225,6 +1273,7 @@
       <tr><td>Собственное участие</td><td class="n">20–30%</td></tr>
     </tbody>
   </table>
+  </div>
 </article>
 
 <article id="ask">
