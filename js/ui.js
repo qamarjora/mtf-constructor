@@ -292,14 +292,14 @@ MTF.renderHerd = function (res) {
 MTF.renderEcon = function (res) {
   const f = MTF.fmt, cap = res.capex, P = MTF.state.params;
 
-  const gname = { prep: 'Подготовка', build: 'Строительство', equip: 'Оборудование', herd: 'Поголовье' };
+  const gname = { build: 'Строительство', equip: 'Оборудование', herd: 'Поголовье' };
   const dcur = MTF.dispCur(P), dsign = MTF.dispSign(P);
   const dd = 2;   // капзатраты показываем без округления
   const dunit = dcur === 'KZT' ? 'тыс. ₸' : 'тыс. ' + dsign;
 
-  const GN = { prep: 'Подготовительный этап', build: 'Строительство и монтаж',
+  const GN = { build: 'Строительство и монтаж',
                equip: 'Оборудование и техника', herd: 'Поголовье' };
-  const GORDER = ['prep', 'build', 'equip', 'herd'];
+  const GORDER = ['build', 'equip', 'herd'];
 
   function capexRow(it, i, gcur) {
     const row = cap.rows.find(r => r.id === it.id);

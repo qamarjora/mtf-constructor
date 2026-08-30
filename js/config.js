@@ -30,7 +30,7 @@ MTF.defaults = {
     baseCurrency: 'KZT',
     displayCurrency: 'EUR',   // валюта сводного итога
     groupCurrency: {          // валюта отображения по группам капзатрат
-      prep: 'KZT', build: 'KZT', equip: 'EUR', herd: 'EUR'
+      build: 'KZT', equip: 'EUR', herd: 'EUR'
     },
     rateEUR: 520,
     rateUSD: 480,
@@ -141,10 +141,6 @@ MTF.defaults = {
 ------------------------------------------------ */
 MTF.capexItems = [
   /* --- Подготовительный этап --- */
-  { id: 'p_land',  name: 'Земельный участок',                group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
-  { id: 'p_psd',   name: 'Проектирование (ПСД)',             group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
-  { id: 'p_exp',   name: 'Вневедомственная экспертиза',      group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
-  { id: 'p_geo',   name: 'Геология и топосъёмка',            group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
 
   /* --- Строительство --- */
   { id: 'b_all',   name: 'Строительство зданий и инфраструктура', group: 'build', unit: 'sum', value: 200000, cur: 'KZT' },

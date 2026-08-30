@@ -435,9 +435,9 @@ MTF.docTables = function (state, res) {
       return rateLine + dt(['Узел комплекса', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
     })(),
     capexTable: (function () {
-      const GN = { prep: 'Подготовительный этап', build: 'Строительство и монтаж',
+      const GN = { build: 'Строительство и монтаж',
                    equip: 'Оборудование и техника', herd: 'Поголовье' };
-      const rows = ['prep', 'build', 'equip', 'herd']
+      const rows = ['build', 'equip', 'herd']
         .filter(g => res.capex.groups[g] > 0).map(g => {
           const gc = MTF.groupCur(p, g), gs = MTF.groupSign(p, g);
           return [GN[g],
@@ -450,11 +450,11 @@ MTF.docTables = function (state, res) {
       return rateLine + dt(['Группа затрат', 'В валюте закупа', 'Тыс. ₸', 'Доля'], rows);
     })(),
     fundingTable: (function () {
-      const GN = { prep: 'Подготовительные расходы', build: 'Строительство',
-                   equip: 'Оборудование и техника', herd: 'Закуп поголовья' };
+      const GN = { build: 'Строительство', equip: 'Оборудование и техника',
+                   herd: 'Закуп поголовья' };
       /* Пустые группы не показываем: ноль в смете читается как забытая
          статья, а не как «этой статьи в проекте нет». */
-      const rows = ['prep', 'build', 'equip', 'herd']
+      const rows = ['build', 'equip', 'herd']
         .filter(g => res.capex.groups[g] > 0)
         .map(g => [GN[g], f.num(res.capex.groups[g]),
           f.pct(res.capex.groups[g] / res.capex.total * 100, 1)]);
