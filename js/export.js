@@ -125,7 +125,8 @@ MTF.export.editTpl = function () {
   const t = prompt('Текст раздела «' + sec.title + '».\n' +
     'Разметка: **жирный**, дефис в начале строки — список.\n' +
     'Значения в фигурных скобках подставляются автоматически.', sec.body);
-  if (t !== null) { sec.body = t; MTF.save(); MTF.render(); }
+  // помечаем правку: только такой текст переживёт обновление шаблонов в коде
+  if (t !== null) { sec.body = t; sec.edited = true; MTF.save(); MTF.render(); }
 };
 
 /* ---------- Проект ---------- */

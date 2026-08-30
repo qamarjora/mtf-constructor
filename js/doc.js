@@ -71,7 +71,16 @@ MTF.mergeDocSections = function (saved) {
   const merged = base.map(b => {
     const s = byId[b.id];
     if (!s) return b;
-    return { id: b.id, title: b.title, enabled: !!s.enabled, body: s.body || b.body };
+    /* Сохранённый текст берём только если пользователь правил его руками
+       (флаг ставит MTF.export.editTpl). Иначе выигрывает текст из кода:
+       раньше сохранённое тело перебивало код всегда, и правки шаблонов
+       новой версии не доходили до открытой сессии и до старого .json. */
+    const keep = s.edited && s.body;
+    return {
+      id: b.id, title: b.title, enabled: !!s.enabled,
+      body: keep ? s.body : b.body,
+      edited: keep ? true : undefined
+    };
   });
   // разделы, которых в текущем наборе нет — добавленные пользователем, не теряем
   saved.forEach(s => {
@@ -465,14 +474,17 @@ MTF.docTables = function (state, res) {
       const notes = [];
       for (let i = 1; i < res.pnl.length; i++) {
         if (!(res.pnl[i - 1].subsidy > 0 && res.pnl[i].subsidy < res.pnl[i - 1].subsidy * 0.6)) continue;
-        // меры, закончившиеся в предыдущем году проекта (yearTo = номер того года)
-        const ended = state.subsidies.filter(s => s.enabled && s.yearTo === i);
+        /* Меры, закончившиеся в предыдущем году проекта (yearTo = номер того
+           года). Нулевая ставка ничего не приносила и падение объяснить
+           не может — такие меры не перечисляем. Названия оставляем как есть:
+           в них есть аббревиатуры, и нижний регистр давал «мтф». */
+        const ended = state.subsidies.filter(s => s.enabled && s.yearTo === i && s.value > 0);
         const capexEnded = ended.filter(s => s.type === 'capex_pct');
+        const names = list => list.map(s => s.name).join('; ');
         const cause = capexEnded.length
-          ? 'заканчиваются разовые инвестиционные субсидии (' +
-            capexEnded.map(s => s.name.toLowerCase()).join('; ') + ')'
+          ? 'заканчиваются разовые инвестиционные субсидии (' + names(capexEnded) + ')'
           : ended.length
-            ? 'заканчиваются меры поддержки (' + ended.map(s => s.name.toLowerCase()).join('; ') + ')'
+            ? 'заканчиваются меры поддержки (' + names(ended) + ')'
             : 'сокращается объём государственной поддержки';
         notes.push('<p><i>Снижение маржи в ' + res.pnl[i].year + ' году — ' + cause +
           '. Субсидии падают с ' + f.num(res.pnl[i - 1].subsidy) + ' до ' + f.num(res.pnl[i].subsidy) +
