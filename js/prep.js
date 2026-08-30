@@ -54,8 +54,9 @@ MTF.prepReserve = 10;
 
 /* Структура участия в подготовительных расходах */
 MTF.prepShare = {
-  operator: 30,   // доля оператора / управляющей компании, %
-  investors: 70   // доля инвесторов, %
+  operator: 30,       // доля оператора / управляющей компании, %
+  investors: 70,      // доля инвесторов, %
+  investorsCount: 0   // количество инвесторов; 0 = считать автоматически
 };
 
 /* ---------- Расчёт ---------- */
@@ -86,14 +87,18 @@ MTF.calcPrep = function (p, costs, team) {
   const grand = costTotal + teamTotal;
   const opShare = share.operator / 100;
   const invShare = share.investors / 100;
-  const investors = Math.max(1, N - 1);   // оператор владеет одной фермой
+  // Количество инвесторов: задано вручную либо фермы минус ферма Оператора
+  const investors = share.investorsCount > 0
+    ? share.investorsCount
+    : Math.max(1, N - 1);
+  const autoCount = !(share.investorsCount > 0);
 
   return {
     costRows: costRows, costTotal: costTotal,
     teamRows: teamRows, teamBase: teamBase,
     teamReserve: teamReserve, teamTotal: teamTotal,
     grand: grand,
-    farms: N, investorsCount: investors,
+    farms: N, investorsCount: investors, autoCount: autoCount,
     operatorSum: grand * opShare,
     investorsSum: grand * invShare,
     perInvestor: grand * invShare / investors,
@@ -195,6 +200,9 @@ MTF.calcPrep = function (p, costs, team) {
     if (!state.params.prepShare) {
       state.params.prepShare = JSON.parse(JSON.stringify(MTF.prepShare));
     }
+    if (state.params.prepShare.investorsCount === undefined) {
+      state.params.prepShare.investorsCount = 0;
+    }
     return state;
   };
 
@@ -255,10 +263,15 @@ MTF.calcPrep = function (p, costs, team) {
       '<div class="f"><label>Доля инвесторов</label>' +
       '<input type="number" data-psh="investors" value="' + sh.investors + '" step="any">' +
       '<span class="u">%</span></div>' +
+      '<div class="f"><label>Количество инвесторов</label>' +
+      '<input type="number" data-psh="investorsCount" value="' +
+        (sh.investorsCount || 0) + '" step="1">' +
+      '<span class="u">чел</span></div>' +
       '<div class="tw"><table><tbody>' +
       '<tr><td>Доля Оператора</td><td class="n">' + f.num(C.operatorSum) + ' ₸</td></tr>' +
       '<tr><td>Доля инвесторов</td><td class="n">' + f.num(C.investorsSum) + ' ₸</td></tr>' +
-      '<tr><td>Инвесторов в проекте</td><td class="n">' + f.num(C.investorsCount) + '</td></tr>' +
+      '<tr><td>Инвесторов в проекте' + (C.autoCount ? ' (автоматически)' : '') +
+      '</td><td class="n">' + f.num(C.investorsCount) + '</td></tr>' +
       '<tr class="tot"><td>На одного инвестора</td><td class="n">' + f.num(C.perInvestor) + ' ₸</td></tr>' +
       '</tbody></table></div>' +
       (Math.abs(sh.operator + sh.investors - 100) > 0.5
