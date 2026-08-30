@@ -161,6 +161,8 @@ MTF.export.loadJson = function () {
           opexItems: s.opexItems || base.opexItems,
           subsidies: s.subsidies || base.subsidies,
           machinery: Array.isArray(s.machinery) && s.machinery.length ? s.machinery : base.machinery,
+          prepCosts: Array.isArray(s.prepCosts) && s.prepCosts.length ? s.prepCosts : base.prepCosts,
+          prepTeam: Array.isArray(s.prepTeam) && s.prepTeam.length ? s.prepTeam : base.prepTeam,
           docSections: MTF.mergeDocSections(s.docSections),
           version: MTF.VERSION
         };
