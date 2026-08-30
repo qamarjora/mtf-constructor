@@ -299,7 +299,13 @@ MTF.calcPrep = function (p, costs, team) {
     on('[data-ptn]', el => S.prepTeam[el.dataset.ptn].name = el.value);
     on('[data-pts]', el => S.prepTeam[el.dataset.pts].salary = parseFloat(el.value) || 0);
     on('[data-ptm]', el => S.prepTeam[el.dataset.ptm].months = parseFloat(el.value) || 0);
-    on('[data-psh]', el => S.params.prepShare[el.dataset.psh] = parseFloat(el.value) || 0);
+    on('[data-psh]', el => {
+      const k = el.dataset.psh, v = parseFloat(el.value) || 0;
+      /* Инвесторы — люди, дробного количества не бывает. Отрицательное
+         приводим к нулю: ноль и так означает автоматический расчёт,
+         и в поле не остаётся минуса, который ни на что не влияет. */
+      S.params.prepShare[k] = k === 'investorsCount' ? Math.max(0, Math.round(v)) : v;
+    });
 
     document.querySelectorAll('[data-pcdel]').forEach(el =>
       el.onclick = () => { S.prepCosts.splice(+el.dataset.pcdel, 1); upd(); });
