@@ -208,27 +208,23 @@ MTF.docSections = [
 
 {{metricsTable}}
 
-**8.2. Капитальные затраты**
-
-{{capexTable}}
-
-**8.3. Структура финансирования**
+**8.2. Структура финансирования**
 
 {{fundingTable}}
 
-**8.4. Прогноз финансовых показателей**
+**8.3. Прогноз финансовых показателей**
 
 {{pnlTable}}
 
-**8.5. График погашения**
+**8.4. График погашения**
 
 {{debtTable}}
 
-**8.6. Доходность на вложения инвестора**
+**8.5. Доходность на вложения инвестора**
 
 {{exitTable}}
 
-**8.7. Государственная поддержка**
+**8.6. Государственная поддержка**
 
 {{subsidyTable}}`
   },
@@ -281,6 +277,8 @@ MTF.docSections = [
 
 **Финансовые риски** — рост стоимости заимствований, кассовые разрывы. Снижение: льготное финансирование, оборотный кредит, резервный фонд.
 
+**Валютные риски** — оборудование и поголовье закупаются за валюту, выручка формируется в тенге. Ослабление тенге удорожает проект. Снижение: фиксация цен в контрактах, закуп до начала строительства.
+
 **Регуляторные риски** — изменение правил субсидирования. Снижение: расчёт базового сценария без учёта субсидий.
 
 **Строительные риски** — удорожание, срыв сроков. Снижение: единый подрядчик, фиксированная цена, контроль Оператора.`
@@ -311,9 +309,27 @@ function dt(head, rows, align) {
     '</tr>').join('') + '</tbody></table>';
 }
 
+/* Строка с курсом над таблицей, где есть валютные суммы.
+   curs — коды валют, которые в этой таблице реально встречаются; тенге
+   игнорируется. Если валютных статей нет, возвращается пустая строка
+   и над таблицей ничего не появляется. */
+MTF.rateNote = function (p, curs) {
+  const order = ['EUR', 'USD', 'RUB'];
+  const list = order.filter(c => curs.indexOf(c) >= 0);
+  if (!list.length) return '';
+  const parts = list.map(c => {
+    const r = MTF.rate(p, c);
+    return MTF.fmt.num(r, r < 10 ? 2 : 0) + ' ₸ за 1 ' +
+      ((MTF.currencies[c] || {}).sign || c);
+  });
+  return '<p><i>Пересчёт по курсу ' + parts.join(', ') + '.</i></p>\n';
+};
+
 MTF.docTables = function (state, res) {
   const f = MTF.fmt, m = res.metrics, fd = res.funding, p = state.params;
   const N = p.project.farmsCount, lastH = res.herd[res.herd.length - 1];
+  /* Курс показываем только по валютам, которые есть в статьях капзатрат */
+  const rateLine = MTF.rateNote(p, res.capex.rows.map(r => r.cur));
 
   return {
     capacityTable: dt(['Помещение', 'Скотомест'], [
@@ -407,7 +423,7 @@ MTF.docTables = function (state, res) {
       const tot = eq.reduce((a, r) => a + r.sum, 0);
       rows.push(['<b>Итого оборудование и техника</b>', '<b>' + f.num(eq.length) + '</b>',
         '<b>' + f.num(MTF.disp(p, tot, dc), dd) + '</b>']);
-      return dt(['Узел комплекса', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
+      return rateLine + dt(['Узел комплекса', 'Позиций', 'Стоимость, тыс. ' + dsg], rows);
     })(),
     capexTable: (function () {
       const GN = { prep: 'Подготовительный этап', build: 'Строительство и монтаж',
@@ -422,30 +438,72 @@ MTF.docTables = function (state, res) {
         });
       rows.push(['<b>Итого стоимость фермы</b>', '—',
         '<b>' + f.num(res.capex.total) + '</b>', '<b>100%</b>']);
-      return dt(['Группа затрат', 'В валюте закупа', 'Тыс. ₸', 'Доля'], rows);
+      return rateLine + dt(['Группа затрат', 'В валюте закупа', 'Тыс. ₸', 'Доля'], rows);
     })(),
-    fundingTable: dt(['Статья', 'Сумма, тыс. ₸', 'Доля'], [
-      ['Подготовительные расходы', f.num(res.capex.groups.prep), f.pct(res.capex.groups.prep / res.capex.total * 100, 1)],
-      ['Строительство', f.num(res.capex.groups.build), f.pct(res.capex.groups.build / res.capex.total * 100, 1)],
-      ['Оборудование и техника', f.num(res.capex.groups.equip), f.pct(res.capex.groups.equip / res.capex.total * 100, 1)],
-      ['Закуп поголовья', f.num(res.capex.groups.herd), f.pct(res.capex.groups.herd / res.capex.total * 100, 1)],
-      ['<b>Итого</b>', '<b>' + f.num(res.capex.total) + '</b>', '<b>100%</b>'],
-      ['Лимит займа', f.num(fd.loanTotal), f.pct(fd.loanShare, 0)],
-      ['Собственное участие', f.num(fd.equity), f.pct(fd.equityShare, 0)]
-    ]),
-    pnlTable: dt(['Год', 'Выручка', 'Субсидии', 'Затраты', 'EBITDA', 'Маржа'],
-      res.pnl.map(y => [y.year, f.num(y.revenue), f.num(y.subsidy), f.num(y.opex + y.operatorFee),
-        f.num(y.ebitda), f.pct(y.margin, 0)])),
+    fundingTable: (function () {
+      const GN = { prep: 'Подготовительные расходы', build: 'Строительство',
+                   equip: 'Оборудование и техника', herd: 'Закуп поголовья' };
+      /* Пустые группы не показываем: ноль в смете читается как забытая
+         статья, а не как «этой статьи в проекте нет». */
+      const rows = ['prep', 'build', 'equip', 'herd']
+        .filter(g => res.capex.groups[g] > 0)
+        .map(g => [GN[g], f.num(res.capex.groups[g]),
+          f.pct(res.capex.groups[g] / res.capex.total * 100, 1)]);
+      rows.push(['<b>Итого</b>', '<b>' + f.num(res.capex.total) + '</b>', '<b>100%</b>']);
+      rows.push(['Лимит займа', f.num(fd.loanTotal), f.pct(fd.loanShare, 0)]);
+      rows.push(['Собственное участие', f.num(fd.equity), f.pct(fd.equityShare, 0)]);
+      return rateLine + dt(['Статья', 'Сумма, тыс. ₸', 'Доля'], rows);
+    })(),
+    pnlTable: (function () {
+      const tbl = dt(['Год', 'Выручка', 'Субсидии', 'Затраты', 'EBITDA', 'Маржа'],
+        res.pnl.map(y => [y.year, f.num(y.revenue), f.num(y.subsidy), f.num(y.opex + y.operatorFee),
+          f.num(y.ebitda), f.pct(y.margin, 0)]));
+      /* Резкое падение субсидий роняет маржу на несколько пунктов. Без
+         пояснения провал в середине таблицы читается как ошибка расчёта,
+         поэтому строку даём на каждый такой год: сноска про конец
+         горизонта под таблицей субсидий к конкретному году не привязана. */
+      const notes = [];
+      for (let i = 1; i < res.pnl.length; i++) {
+        if (!(res.pnl[i - 1].subsidy > 0 && res.pnl[i].subsidy < res.pnl[i - 1].subsidy * 0.6)) continue;
+        // меры, закончившиеся в предыдущем году проекта (yearTo = номер того года)
+        const ended = state.subsidies.filter(s => s.enabled && s.yearTo === i);
+        const capexEnded = ended.filter(s => s.type === 'capex_pct');
+        const cause = capexEnded.length
+          ? 'заканчиваются разовые инвестиционные субсидии (' +
+            capexEnded.map(s => s.name.toLowerCase()).join('; ') + ')'
+          : ended.length
+            ? 'заканчиваются меры поддержки (' + ended.map(s => s.name.toLowerCase()).join('; ') + ')'
+            : 'сокращается объём государственной поддержки';
+        notes.push('<p><i>Снижение маржи в ' + res.pnl[i].year + ' году — ' + cause +
+          '. Субсидии падают с ' + f.num(res.pnl[i - 1].subsidy) + ' до ' + f.num(res.pnl[i].subsidy) +
+          ' тыс. ₸, маржа с ' + f.pct(res.pnl[i - 1].margin, 0) + ' до ' + f.pct(res.pnl[i].margin, 0) +
+          '. Операционные показатели фермы при этом не ухудшаются.</i></p>');
+      }
+      return notes.length ? tbl + '\n' + notes.join('\n') : tbl;
+    })(),
     debtTable: dt(['Год', 'Остаток', 'Проценты', 'Осн. долг', 'Платёж', 'DSCR'],
       res.debt.map((d, i) => [d.year, f.num(d.opening), f.num(d.interest), f.num(d.principal),
         f.num(d.payment), m.dscr[i].value !== null ? m.dscr[i].value.toFixed(2) : '—'])),
     exitTable: dt(['Год выхода', 'MOIC', 'IRR на вложения', 'Стоимость доли, тыс. ₸'],
       m.exits.map(e => [e.year, f.x(e.moic), e.irr !== null ? f.pct(e.irr * 100) : '—', f.num(e.equityValue)])),
-    subsidyTable: state.subsidies.filter(s => s.enabled).length
-      ? dt(['Мера поддержки', 'Ставка', 'Период'],
-        state.subsidies.filter(s => s.enabled).map(s =>
-          [s.name, f.num(s.value, 1) + ' ' + s.unit, 'годы ' + s.yearFrom + '–' + s.yearTo]))
-      : '<p><i>Меры государственной поддержки в расчёте не учитывались.</i></p>',
+    subsidyTable: (function () {
+      const on = state.subsidies.filter(s => s.enabled);
+      if (!on.length) return '<p><i>Меры государственной поддержки в расчёте не учитывались.</i></p>';
+      const tbl = dt(['Мера поддержки', 'Ставка', 'Период'],
+        on.map(s => [s.name, f.num(s.value, 1) + ' ' + s.unit,
+          'годы ' + s.yearFrom + '–' + s.yearTo]));
+      /* Меры могут заканчиваться раньше конца горизонта — тогда последние
+         годы посчитаны без поддержки. Это допущение, а не пропуск данных,
+         и в документе для кредитора его нужно назвать вслух. */
+      const last = Math.max.apply(null, on.map(s => s.yearTo));
+      if (last >= p.project.horizon) return tbl;
+      const tail = p.project.horizon - last;
+      return tbl + '\n<p><i>Меры поддержки заданы по ' + last + '-й год проекта (' +
+        (p.project.startYear + last - 1) + ' год). Оставшиеся ' + tail +
+        (tail === 1 ? ' год горизонта рассчитан' : ' года горизонта рассчитаны') +
+        ' без государственной поддержки: продление программ не закладывалось. ' +
+        'Допущение консервативное — если меры продлят, показатели проекта улучшатся.</i></p>';
+    })(),
     subsidyComparisonTable: (function () {
       const imp = MTF.subsidyImpact(res);
       if (!imp) return '<p><i>Меры государственной поддержки в расчёте не учитывались, ' +
