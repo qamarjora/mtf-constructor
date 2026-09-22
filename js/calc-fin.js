@@ -157,7 +157,7 @@ MTF.calcMetrics = function (p, cf, capex, funding, pnl, debt, herdYears, skipExi
     for (let i = 0; i < cf.rows.length; i++) {
       cum += cf.rows[i].cfe;
       const residual = Math.max(0, buildBase * (1 - (i + 1) / MTF.taxes.depreciationYears)) +
-        (herdYears[i] ? herdYears[i].cows * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.7 : 0);
+        (herdYears[i] ? (herdYears[i].assetValue !== undefined ? herdYears[i].assetValue : herdYears[i].cows * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.7) : 0);
       const eqValue = residual - debt[i].closing - cf.rows[i].wcBalance;
       const flows = [];
       for (let j = 0; j <= i; j++) flows.push(j === 0 ? -funding.equity + cf.rows[j].cfe : cf.rows[j].cfe);
