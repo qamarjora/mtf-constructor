@@ -172,8 +172,19 @@ MTF.feedlot = MTF.feedlot || {};
   };
 
   /* ---------- Годовая сводка в формате herdYears ядра ---------- */
+  /* Симуляция зависит только от этих вводных. runModel вызывает её дважды
+     (стадо и капзатраты), анализ чувствительности — десятки раз, поэтому
+     последний результат запоминается. */
+  let memo = { key: null, sim: null };
+  function simulateCached(p) {
+    const key = JSON.stringify([p.feedlot, p.project.horizon, p.project.startYear,
+      p.prices.priceInflation, p.prices.costInflation]);
+    if (memo.key !== key) memo = { key: key, sim: FL.simulate(p) };
+    return memo.sim;
+  }
+
   FL.calcHerd = function (p) {
-    const sim = FL.simulate(p);
+    const sim = simulateCached(p);
     const keys = ['revenue', 'purchase', 'initialStock', 'feed', 'bedding', 'vet', 'extra', 'other',
       'bought', 'sold', 'dead', 'liveKgSold', 'gainKg', 'dmKg', 'headDays',
       'batches', 'batchesByDays', 'cycleDaysSum'];
@@ -384,8 +395,21 @@ MTF.feedlot = MTF.feedlot || {};
   /* ---------- Показатели для документа ---------- */
   FL.kpi = function (p, res) {
     const herd = res.herd, pnl = res.pnl;
-    // «Рабочий» год — последний полный год горизонта
-    const i = herd.length - 1, y = herd[i], r = pnl[i];
+    /* Рабочий режим — среднее за годы с 3-го до конца горизонта.
+       Один год брать нельзя: партии не совпадают с календарём, и в отдельном
+       году может быть на одну продажу больше или меньше — показатели на
+       голову прыгают на десятки процентов. */
+    const from = Math.min(2, herd.length - 1);
+    const H = herd.slice(from), R = pnl.slice(from), n = H.length;
+    const sum = (arr, fn) => arr.reduce((a, x) => a + fn(x), 0);
+    const sold = sum(H, y => y.sold), kg = sum(H, y => y.liveKgSold), gain = sum(H, y => y.gainKg);
+    const cost = sum(R, r => r.opex + r.operatorFee), purch = sum(H, y => y.purchase);
+    const y = { sold: sold / n, liveKgSold: kg / n, gainKg: gain / n, fcr: gain > 0 ? sum(H, y => y.dmKg) / gain : 0 };
+    const r = {
+      costPerKgGain: gain > 0 ? (cost - purch) * 1000 / gain : 0,
+      costPerKgLive: kg > 0 ? cost * 1000 / kg : 0,
+      marginPerHead: sold > 0 ? sum(R, r => r.ebitda) / sold : 0
+    };
     const totBatches = herd.reduce((a, h) => a + h.batches, 0);
     const avgCycle = totBatches > 0 ? herd.reduce((a, h) => a + h.cycleDaysSum, 0) / totBatches : 0;
     const S = p.feedlot.sale;
@@ -430,7 +454,7 @@ MTF.feedlot = MTF.feedlot || {};
       out.push(Math.round(kpi.byDaysShare) + '% партий уходят по предельному сроку, не набрав ' + A.weightOut +
         ' кг. Проверьте привес, сезонность или предельный срок.');
     if (kpi.marginPerHead < 0)
-      out.push('В рабочем году EBITDA на реализованную голову отрицательная. Главный рычаг — разница ' +
+      out.push('В рабочем режиме EBITDA на реализованную голову отрицательная. Главный рычаг — разница ' +
         'цен закупа и реализации (сейчас ' + n(kpi.priceSpread) + ' ₸/кг).');
     if (res.cf && kpi.wc.peak > 0) {
       const annual = res.cf.wcPeak;

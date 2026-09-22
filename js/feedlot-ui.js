@@ -52,13 +52,14 @@ window.MTF = window.MTF || {};
   MTF.load = function () { return FL.ensure(origLoad()); };
 
   /* Переключение типа проекта */
-  const DOMAIN = ['capexItems', 'staff', 'opexItems', 'subsidies'];
+  const DOMAIN = ['capexItems', 'staff', 'opexItems', 'subsidies', 'docSections'];
   FL.switchType = function (type) {
     const S = FL.ensure(MTF.state), P = S.params, from = P.project.type || 'mtf';
     if (type === from) return;
 
-    P.stash[from] = { lists: {}, project: { name: P.project.name, farmsCount: P.project.farmsCount },
-      baseCows: P.staff.baseCows };
+    P.stash[from] = { lists: {}, project: { name: P.project.name, farmsCount: P.project.farmsCount,
+      groupCurrency: clone(P.project.groupCurrency || {}) },
+      baseCows: P.staff.baseCows, docMode: S.docMode };
     DOMAIN.forEach(k => { P.stash[from].lists[k] = clone(S[k]); });
 
     const saved = P.stash[type];
@@ -66,6 +67,7 @@ window.MTF = window.MTF || {};
       DOMAIN.forEach(k => { if (saved.lists[k]) S[k] = clone(saved.lists[k]); });
       Object.assign(P.project, saved.project);
       P.staff.baseCows = saved.baseCows;
+      S.docMode = saved.docMode || 'estimate';
     } else if (type === 'feedlot') {
       S.capexItems = clone(FL.capexItems);
       S.staff = clone(FL.staff);
@@ -73,7 +75,10 @@ window.MTF = window.MTF || {};
       S.subsidies = clone(FL.subsidies);
       P.project.name = 'Откормочная площадка КРС';
       P.project.farmsCount = 1;
+      P.project.groupCurrency = Object.assign({}, P.project.groupCurrency, { herd: 'KZT' });  // бычки — за тенге
       P.staff.baseCows = FL.capacity(P).design;
+      S.docMode = 'estimate';
+      S.docSections = FL.defaultDocSections ? FL.defaultDocSections('estimate') : S.docSections;
     } else {
       S.capexItems = clone(MTF.capexItems);
       S.staff = clone(MTF.staff);
@@ -82,6 +87,10 @@ window.MTF = window.MTF || {};
       P.project.name = MTF.defaults.project.name;
       P.project.farmsCount = MTF.defaults.project.farmsCount;
       P.staff.baseCows = MTF.defaults.staff.baseCows;
+      S.docMode = 'estimate';
+      S.docSections = MTF.mergeDocSections(null);
+      P.project.type = 'mtf';
+      MTF.applyDocMode(S, 'estimate');
     }
     P.project.type = type;
     MTF.activeTab = 'inputs';
@@ -269,7 +278,7 @@ window.MTF = window.MTF || {};
     return (res.checks.length ? res.checks.map(c => '<div class="note warn">' + c + '</div>').join('')
       : '<div class="note ok">Вводные согласованы, узких мест и аномалий не найдено.</div>') +
 
-      '<div class="card"><h3>Ключевые показатели рабочего года</h3><div class="kpis">' +
+      '<div class="card"><h3>Ключевые показатели рабочего режима</h3><div class="kpis">' +
       kpi('Вместимость', f.num(k.capacity), 'гол. единовременно') +
       kpi('Узкое место', k.bottleneck, 'из ' + f.num(k.capacityDesign) + ' проектных') +
       kpi('Цикл откорма', f.num(k.avgCycleDays), 'дней, план ' + f.num(k.plannedDays)) +
@@ -280,7 +289,7 @@ window.MTF = window.MTF || {};
       kpi('Себестоимость кг ж.в.', f.num(k.costPerKgLive), '₸, все затраты') +
       kpi('EBITDA на голову', f.num(k.marginPerHead, 1), 'тыс. ₸') +
       kpi('Пик оборотки', f.num(k.wc.peak), 'тыс. ₸, помесячно') +
-      '</div><div class="hint">Рабочий год — последний год горизонта. Пик оборотки считается помесячно ' +
+      '</div><div class="hint">Рабочий режим — среднее за годы с 3-го до конца горизонта. Пик оборотки считается помесячно ' +
       'за первые 24 месяца после завоза: годовая модель этот разрыв сглаживает.</div></div>' +
 
       '<div class="grid g2" style="margin-top:14px">' +
@@ -348,14 +357,6 @@ window.MTF = window.MTF || {};
   const origFin = MTF.renderFin;
   MTF.renderFin = function (res) {
     return isF() ? withDisplay(res, origFin) : origFin.apply(this, arguments);
-  };
-
-  /* ---------- 6. Документ — этап 3 ---------- */
-  const origDoc = MTF.renderDocTab;
-  MTF.renderDocTab = function (res) {
-    if (!isF()) return origDoc.apply(this, arguments);
-    return '<div class="card"><h3>Документ по откорму</h3><div class="note warn">Шаблоны документов под откорм ' +
-      'в разработке. Тексты МТФ сюда не подходят (молоко, стадо, отёлы), поэтому генерация пока отключена.</div></div>';
   };
 
   /* ---------- Субсидии: типы откорма в подсказке ---------- */
