@@ -85,14 +85,15 @@ MTF.feedlot = MTF.feedlot || {};
        even — секции заходят равномерно в течение одного цикла, площадка
               работает непрерывным потоком (продажи каждые 2–4 недели);
        fast — N секций в месяц, партии идут «волнами». */
-    const perMonth = Math.max(1, F.sectionsPerMonth);
+    const perMonth = Math.max(1, Number(F.sectionsPerMonth) || 1);
+    const launch = Number(F.launchMonth) || 0;   // из выпадающего списка приходит строкой
     const nSec = F.capacity.sections;
     const step = (planned + A.sanitationDays) / Math.max(1, nSec);
     const sections = [];
     for (let s = 0; s < nSec; s++) {
       const start = F.fillMode === 'fast'
-        ? dayOfMonth(F.launchMonth + Math.floor(s / perMonth))
-        : dayOfMonth(F.launchMonth) + Math.round(s * step);
+        ? dayOfMonth(launch + Math.floor(s / perMonth))
+        : dayOfMonth(launch) + Math.round(s * step);
       sections.push({ state: 'wait', start: start, heads: 0, w: 0, age: 0, rest: 0, initial: true });
     }
 
@@ -259,7 +260,8 @@ MTF.feedlot = MTF.feedlot || {};
     const inf = 1 + p.prices.costInflation / 100;
     const cap = herdYears.meta.capacity.value;
     // ФОТ масштабируется от вместимости площадки, а не от коров
-    const pPay = Object.assign({}, p, { staff: Object.assign({}, p.staff, { baseCows: cap }) });
+    const base = p.staff.baseCows > 0 ? p.staff.baseCows : cap;
+    const pPay = Object.assign({}, p, { staff: Object.assign({}, p.staff, { baseCows: base }) });
 
     const rev = herdYears.map((y, i) => {
       const detail = {};
@@ -309,8 +311,8 @@ MTF.feedlot = MTF.feedlot || {};
         margin: (revenue + subsidy) > 0 ? ebitda / (revenue + subsidy) * 100 : 0,
         depreciation: i === 0 ? 0 : depr,
         ebit: ebitda - (i === 0 ? 0 : depr),
-        milkCost: 0,
         costPerKgLive: y.liveKgSold > 0 ? cost * 1000 / y.liveKgSold : 0,   // ₸ на кг реализованного ж.в.
+        milkCost: y.liveKgSold > 0 ? cost * 1000 / y.liveKgSold : 0,        // колонка «себестоимость» в таблицах ядра
         costPerKgGain: y.gainKg > 0 ? (cost - (y.purchase || 0)) * 1000 / y.gainKg : 0, // ₸ на кг привеса
         marginPerHead: y.sold > 0 ? ebitda / y.sold : 0,                     // тыс. ₸
         feedHa: 0,
@@ -341,6 +343,42 @@ MTF.feedlot = MTF.feedlot || {};
       if (cum < peak) { peak = cum; peakMonth = m; }
     });
     return { peak: -peak, month: peakMonth };
+  };
+
+  /* ---------- Экономика одной головы ----------
+     Базовые цены, без сезонности и инфляции. Считается на одну
+     закупленную голову: падёж уменьшает выручку, но не закуп.
+     Главный показатель для переговоров — цена безубыточности. */
+  FL.unitEconomics = function (p) {
+    const F = p.feedlot, A = F.animals, fd = F.feed, S = F.sale, K = F.costs;
+    const days = FL.plannedDays(A);
+    const adaptGain = A.adaptDays * A.adgAdapt / 1000;
+    const wAdaptEnd = A.weightIn + adaptGain;
+    const restDays = Math.max(0, days - A.adaptDays);
+    const wOut = Math.min(A.weightOut, wAdaptEnd + restDays * A.adg / 1000);
+    const dmAdapt = (A.weightIn + wAdaptEnd) / 2 * fd.dmiPct / 100 * A.adaptDays;
+    const dmFat = (wAdaptEnd + wOut) / 2 * fd.dmiPct / 100 * restDays;
+    const surv = 1 - A.mortality / 100;
+    const liveOut = wOut * (1 - S.shrink / 100) * surv;
+    const priceKg = S.mode === 'carcass' ? S.carcassYield / 100 * S.priceCarcass : S.priceOut;
+
+    const r = {
+      days: days, weightOut: wOut, gain: wOut - A.weightIn,
+      revenue: liveOut * priceKg / 1000,
+      purchase: A.weightIn * S.priceIn / 1000,
+      feed: (dmAdapt * fd.dmCostAdapt + dmFat * fd.dmCost) / 1000,
+      bedding: fd.beddingKg * fd.beddingPrice * days / 1000,
+      vet: K.vetPerHead, extra: K.purchaseExtra,
+      other: K.otherPerHeadDay * days / 1000,
+      fcr: (wOut - A.weightIn) > 0 ? (dmAdapt + dmFat) / (wOut - A.weightIn) : 0
+    };
+    r.costs = r.purchase + r.feed + r.bedding + r.vet + r.extra + r.other;
+    r.margin = r.revenue - r.costs;
+    r.costPerKgGain = r.gain > 0 ? (r.costs - r.purchase) * 1000 / r.gain : 0;       // ₸
+    // Цена реализации, при которой маржа = 0: ₸/кг ж.в. или ₸/кг туши — по способу продажи
+    const saleKg = S.mode === 'carcass' ? liveOut * S.carcassYield / 100 : liveOut;
+    r.breakEvenPrice = saleKg > 0 ? r.costs * 1000 / saleKg : 0;
+    return r;
   };
 
   /* ---------- Показатели для документа ---------- */
