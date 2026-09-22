@@ -33,5 +33,11 @@ const s2 = B.feedlot.initState(mtfState(B)); s2.params.feedlot.capacity.drinkers
 const r2 = B.runModel(s2);
 ok(r2.feedlot.capacity === 800 && r2.feedlot.bottleneck === 'поилки', 'поилки ограничивают до 800 гол.');
 
+console.log('4. Экономика головы сходится с моделью');
+const u = B.feedlot.unitEconomics(st.params);
+const perSold = (y.revenue - y.purchase - y.feed - y.bedding - y.vet - y.extra - y.other) / y.sold;
+ok(Math.abs(u.margin - perSold) / Math.abs(perSold) < 0.05, 'маржа на голову: формула ' + u.margin.toFixed(0) + ' / модель ' + perSold.toFixed(0) + ' тыс. ₸');
+ok(Math.abs(u.revenue * u.breakEvenPrice / 1700 - u.costs) < 1, 'цена безубыточности обнуляет маржу (' + u.breakEvenPrice.toFixed(0) + ' ₸/кг)');
+
 console.log(fails ? '\nОШИБОК: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);
