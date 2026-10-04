@@ -1,5 +1,5 @@
 /* ============================================================
-   ИНТЕРФЕЙС
+   ИНТЕРФЕЙС  v1.1
    ============================================================ */
 
 window.MTF = window.MTF || {};
@@ -18,25 +18,7 @@ MTF.fmt = {
       maximumFractionDigits: d === undefined ? 1 : d
     }) + '%';
   },
-  x: function (v) { return v === null || isNaN(v) ? '—' : v.toFixed(1) + 'x'; },
-
-  /* Строка из MTF.subsidyImpact в готовый текст.
-     good — стало ли лучше от господдержки, null если сравнивать нечего. */
-  impact: function (r) {
-    const one = v => v === null ? '—'
-      : (r.unit === '%' ? MTF.fmt.pct(v, r.d) : MTF.fmt.num(v, r.d));
-    let diff = '—';
-    if (r.diff !== null) {
-      const abs = Math.abs(r.diff);
-      const body = r.diffUnit ? MTF.fmt.num(abs, r.d) + ' ' + r.diffUnit
-        : (r.unit === '%' ? MTF.fmt.pct(abs, r.d) : MTF.fmt.num(abs, r.d));
-      diff = (r.diff > 0 ? '+' : r.diff < 0 ? '−' : '') + body;
-    }
-    return {
-      off: one(r.off), on: one(r.on), diff: diff,
-      good: (r.diff === null || r.diff === 0) ? null : ((r.diff > 0) === (r.better === 'up'))
-    };
-  }
+  x: function (v) { return v === null || isNaN(v) ? '—' : v.toFixed(1) + 'x'; }
 };
 
 MTF.state = null;
@@ -176,6 +158,8 @@ MTF.renderInputs = function (res) {
     field('Доля тёлочек в приплоде', 'production.heiferShare', '%') +
     field('Возраст первого отёла', 'production.firstCalvingMo', 'мес') +
     field('Возраст продажи телят', 'production.calfSaleAgeMo', 'мес') +
+    field('Возраст выбраковки тёлок', 'production.heiferCullAgeMo', 'мес') +
+    field('Оставлять на ремонт', 'production.heiferKeepRatio', '% к норме') +
     '<h4>Сценарии</h4>' +
     field('Ремонт стада', 'production.remontMode', '', 'select',
       [['own', 'Свой молодняк'], ['purchase', 'Покупка нетелей'], ['outsource', 'Сторонняя площадка']]) +
@@ -219,6 +203,7 @@ MTF.renderInputs = function (res) {
     field('Молоко', 'prices.milk', '₸/л') +
     field('Телёнок', 'prices.calf', 'т.₸') +
     field('Выбракованная корова', 'prices.cullCow', 'т.₸') +
+    field('Сверхремонтная тёлка', 'prices.heiferYoung', 'т.₸') +
     (P.production.bullMode !== 'sell_calf' ? field('Бычок, живой вес', 'prices.bullKg', '₸/кг') : '') +
     field('Рост цен реализации', 'prices.priceInflation', '%/год') +
     field('Рост затрат', 'prices.costInflation', '%/год') +
@@ -255,6 +240,7 @@ MTF.renderHerd = function (res) {
     '<td class="n">' + f.num(y.milkLiters / 1000) + '</td>' +
     '<td class="n">' + f.num(y.milkPerCow) + '</td>' +
     '<td class="n">' + f.num(y.calvesSold) + '</td>' +
+    '<td class="n">' + f.num((y.heifersCulled || 0) + (y.surplusSold || 0)) + '</td>' +
     '<td class="n">' + f.num(y.cullSold) + '</td>' +
     '<td class="n">' + f.num(y.heifersPurchased) + '</td>' +
     '<td class="n">' + f.num(y.flexUsed) + '</td></tr>').join('');
@@ -284,7 +270,7 @@ MTF.renderHerd = function (res) {
     '<div class="card" style="margin-top:14px"><h3>Движение поголовья по годам</h3><div class="tw"><table>' +
     '<thead><tr><th>Год</th><th>Фураж.</th><th>Дойные</th><th>Сухост.</th><th>Родилка</th><th>Телята</th>' +
     '<th>Молодн.</th><th>Бычки</th><th>Всего</th><th>Надой, т</th><th>л/фур.гол</th>' +
-    '<th>Прод. телят</th><th>Выбрак.</th><th>Закуп нет.</th><th>Гибк. места</th></tr></thead><tbody>' +
+    '<th>Прод. телят</th><th>Прод. тёлок</th><th>Выбрак.</th><th>Закуп нет.</th><th>Гибк. места</th></tr></thead><tbody>' +
     rows + '</tbody></table></div></div>';
 };
 
@@ -292,14 +278,14 @@ MTF.renderHerd = function (res) {
 MTF.renderEcon = function (res) {
   const f = MTF.fmt, cap = res.capex, P = MTF.state.params;
 
-  const gname = { build: 'Строительство', equip: 'Оборудование', herd: 'Поголовье' };
+  const gname = { prep: 'Подготовка', build: 'Строительство', equip: 'Оборудование', herd: 'Поголовье' };
   const dcur = MTF.dispCur(P), dsign = MTF.dispSign(P);
   const dd = 2;   // капзатраты показываем без округления
   const dunit = dcur === 'KZT' ? 'тыс. ₸' : 'тыс. ' + dsign;
 
-  const GN = { build: 'Строительство и монтаж',
+  const GN = { prep: 'Подготовительный этап', build: 'Строительство и монтаж',
                equip: 'Оборудование и техника', herd: 'Поголовье' };
-  const GORDER = ['build', 'equip', 'herd'];
+  const GORDER = ['prep', 'build', 'equip', 'herd'];
 
   function capexRow(it, i, gcur) {
     const row = cap.rows.find(r => r.id === it.id);
@@ -503,12 +489,7 @@ MTF.renderFin = function (res) {
     ? '<div class="note err"><b>Оборотного кредита не хватает.</b> Лимит ' + f.num(res.cf.wcCap) +
       ' тыс. ₸ исчерпан — дефицит нечем закрыть. Нужно больше собственных средств или пересмотр параметров.</div>' : '';
   const dscrBad = m.minDscr < 1.2 && isFinite(m.minDscr)
-    ? '<div class="note warn">Минимальный DSCR ' + m.minDscr.toFixed(2) +
-      '. Кредиторы обычно требуют не ниже 1,2.' +
-      (isFinite(m.minDscrY2) && m.minDscrY2 >= 1.2
-        ? ' Со второго года покрытие выходит на ' + m.minDscrY2.toFixed(2) +
-          ' — просадка приходится на пусконаладочный год.'
-        : '') + '</div>' : '';
+    ? '<div class="note warn">Минимальный DSCR ' + m.minDscr.toFixed(2) + '. Кредиторы обычно требуют не ниже 1,2.</div>' : '';
 
   const debtRows = res.debt.map((d, i) =>
     '<tr><td class="n">' + d.year + '</td><td class="n">' + f.num(d.opening) + '</td>' +
@@ -530,21 +511,6 @@ MTF.renderFin = function (res) {
     '<td class="n ' + (e.irr !== null && e.irr < 0 ? 'neg' : '') + '">' +
     (e.irr !== null ? f.pct(e.irr * 100) : '—') + '</td>' +
     '<td class="n">' + f.num(e.equityValue) + '</td></tr>').join('');
-
-  const impact = (function () {
-    const imp = MTF.subsidyImpact(res);
-    const head = '<div class="card" style="margin-bottom:14px"><h3>Влияние господдержки</h3>';
-    if (!imp) return head + '<div class="note">Все меры поддержки выключены — ' +
-      'расчёт идёт в одном сценарии, сравнивать не с чем.</div></div>';
-    return head + '<div class="kpis">' + imp.map(r => {
-      const t = f.impact(r);
-      return kpi(r.label + (r.unit && r.unit !== '%' ? ', ' + r.unit : ''), t.diff,
-        'без ' + t.off + ' → с ' + t.on,
-        t.good === null ? '' : (t.good ? 'good' : 'bad'));
-    }).join('') + '</div>' +
-      '<div class="hint">Сценарий без поддержки пересчитан целиком: сняты и субсидии ' +
-      'в выручке, и снижение ставки по кредиту.</div></div>';
-  })();
 
   const N = P.project.farmsCount, lastH = res.herd[res.herd.length - 1];
 
@@ -576,18 +542,8 @@ MTF.renderFin = function (res) {
       m.irr !== null && m.irr * 100 > P.finance.wacc ? 'good' : 'bad') +
     kpi('Окупаемость', m.payback ? m.payback.toFixed(1) : '—', 'лет') +
     kpi('Дисконт. окупаемость', m.discountedPayback ? m.discountedPayback.toFixed(1) : '—', 'лет') +
-    kpi('Мин. DSCR', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—', 'весь горизонт',
-      m.minDscr >= 1.2 ? 'good' : 'bad') +
-    kpi('Мин. DSCR со 2-го года', isFinite(m.minDscrY2) ? m.minDscrY2.toFixed(2) : '—',
-      'без пусконаладки', m.minDscrY2 >= 1.2 ? 'good' : 'bad') +
+    kpi('Мин. DSCR', isFinite(m.minDscr) ? m.minDscr.toFixed(2) : '—', '', m.minDscr >= 1.2 ? 'good' : 'bad') +
     '</div>' +
-
-    '<div class="hint" style="margin:-6px 0 14px">Второй показатель не учитывает ' +
-    'первый год проекта: идут пусконаладка и наполнение стада, обслуживать долг ' +
-    'уже нужно, а проектного удоя ещё нет. Кредиторы обычно смотрят на покрытие ' +
-    'в рабочем режиме, но требование не ниже 1,2 формально относится ко всему сроку.</div>' +
-
-    impact +
 
     '<div class="row"><button class="btn pri" id="saveScen">Сохранить как сценарий</button>' +
     (MTF.scenarios.length ? '<button class="btn" id="clearScen">Очистить сравнение</button>' : '') + '</div>' +
@@ -849,7 +805,7 @@ MTF.load = function () {
       staff: Array.isArray(o.staff) ? o.staff : base.staff,
       opexItems: Array.isArray(o.opexItems) ? o.opexItems : base.opexItems,
       subsidies: Array.isArray(o.subsidies) && o.subsidies.length ? o.subsidies : base.subsidies,
-      docSections: MTF.mergeDocSections(o.docSections),
+      docSections: Array.isArray(o.docSections) && o.docSections.length ? o.docSections : base.docSections,
       docMode: o.docMode || 'estimate',
       version: MTF.VERSION
     };
