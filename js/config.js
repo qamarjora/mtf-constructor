@@ -1,11 +1,11 @@
 /* ============================================================
-   КОНФИГУРАЦИЯ ПРОЕКТА
+   КОНФИГУРАЦИЯ ПРОЕКТА  v1.1
    Здесь меняются справочники и значения по умолчанию.
    ============================================================ */
 
 window.MTF = window.MTF || {};
 
-MTF.VERSION = '1.2.0';
+MTF.VERSION = '1.1.0';
 
 /* ---------- Валюты ----------
    base — валюта расчёта. Все суммы приводятся к ней.
@@ -30,7 +30,7 @@ MTF.defaults = {
     baseCurrency: 'KZT',
     displayCurrency: 'EUR',   // валюта сводного итога
     groupCurrency: {          // валюта отображения по группам капзатрат
-      build: 'KZT', equip: 'EUR', herd: 'EUR'
+      prep: 'KZT', build: 'KZT', equip: 'EUR', herd: 'EUR'
     },
     rateEUR: 520,
     rateUSD: 480,
@@ -93,7 +93,7 @@ MTF.defaults = {
     dmPriceYoung: 60,
     landMode: 'perHead',     // fixed | perHead
     landHa: 1000,
-    landHaPerCow: 1.5,
+    landHaPerCow: 2.1,
     landCostPerHa: 220000,
     lumpAnnual: 0            // фиксированная сумма в год, тыс. ₸
   },
@@ -141,6 +141,10 @@ MTF.defaults = {
 ------------------------------------------------ */
 MTF.capexItems = [
   /* --- Подготовительный этап --- */
+  { id: 'p_land',  name: 'Земельный участок',                group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+  { id: 'p_psd',   name: 'Проектирование (ПСД)',             group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+  { id: 'p_exp',   name: 'Вневедомственная экспертиза',      group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
+  { id: 'p_geo',   name: 'Геология и топосъёмка',            group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
 
   /* --- Строительство --- */
   { id: 'b_all',   name: 'Строительство зданий и инфраструктура', group: 'build', unit: 'sum', value: 200000, cur: 'KZT' },
