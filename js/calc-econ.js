@@ -1,5 +1,5 @@
 /* ============================================================
-   ЭКОНОМИКА
+   ЭКОНОМИКА  v1.1
    Мультивалютные капзатраты, режимы кормов и ФОТ.
    Все итоги в тыс. тенге.
    ============================================================ */
@@ -9,10 +9,6 @@ window.MTF = window.MTF || {};
 /* ---------- Капитальные затраты ---------- */
 MTF.calcCapex = function (p, items) {
   const rows = [];
-  /* prep оставлен в аккумуляторе ради старых проектов: там могут лежать
-     статьи с этой группой, и без ключа они дали бы NaN. В стоимость
-     фермы группа не входит — подготовительный этап считается в prep.js
-     и оплачивается участниками до кредита. */
   const groups = { prep: 0, build: 0, equip: 0, herd: 0 };
 
   items.forEach(it => {
@@ -40,7 +36,7 @@ MTF.calcCapex = function (p, items) {
     }
   });
 
-  const subtotal = groups.build + groups.equip + groups.herd;
+  const subtotal = groups.prep + groups.build + groups.equip + groups.herd;
   // резерв начисляется на строительство и оборудование; скот идёт по цене контракта
   const reserve = (groups.build + groups.equip) * MTF.capexReserve / 100;
   groups.build += reserve;
@@ -140,6 +136,8 @@ MTF.calcRevenue = function (p, herdYears) {
     detail['Молоко'] = y.milkLiters * p.prices.milk * k / 1000;
     if (y.calvesSold > 0) detail['Реализация телят'] = y.calvesSold * p.prices.calf * k;
     if (y.cullSold > 0) detail['Выбракованные коровы'] = y.cullSold * p.prices.cullCow * k;
+    if (y.heifersCulled > 0)
+      detail['Продажа сверхремонтных тёлок'] = y.heifersCulled * p.prices.heiferYoung * k;
     if (y.surplusSold > 0)
       detail['Сверхремонтные нетели'] = y.surplusSold * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.85 * k;
     if (y.bullsSold > 0) detail['Реализация бычков'] = y.bullWeightKg * p.prices.bullKg * k / 1000;
