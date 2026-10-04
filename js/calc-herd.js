@@ -1,5 +1,5 @@
 /* ============================================================
-   ДВИЖЕНИЕ СТАДА — помесячная модель
+   ДВИЖЕНИЕ СТАДА — помесячная модель  v1.1
    Гибкое размещение молодняка, режимы задания удоя,
    докуп поголовья по годам.
    ============================================================ */
@@ -91,7 +91,7 @@ MTF.calcHerd = function (p) {
       milkLiters: 0, calvings: 0, calvesBorn: 0,
       calvesSoldM: 0, calvesSoldF: 0, cullSold: 0,
       bullsSold: 0, bullWeightKg: 0,
-      heifersPurchased: 0, surplusSold: 0,
+      heifersPurchased: 0, surplusSold: 0, heifersCulled: 0, heifersCulledAge: 0,
       warnings: []
     };
   }
@@ -149,13 +149,36 @@ MTF.calcHerd = function (p) {
 
     const saleAge = Math.max(1, P.calfSaleAgeMo);
 
+    /* Отбор тёлочек. Возраст выбраковки задаётся отдельно от возраста
+       продажи телят: до него тёлочки растут, после — лишние уходят.
+       Если возраст выбраковки не больше возраста продажи телят,
+       отбор идёт сразу на выходе из телятника, как раньше. */
+    const cullAge = Math.max(saleAge, Math.min(29, P.heiferCullAgeMo || saleAge));
+    const keepRatio = (P.heiferKeepRatio || 130) / 100;
+    /* Стадо считается вышедшим на мощность с допуском в полторы месячные
+       выбраковки: поголовье колеблется вокруг цели, и жёсткий порог
+       почти всегда оказывался чуть выше текущего значения. */
+    const monthlyCull = cows * (P.cullRate / 100) / 12;
+    const atCapacity = cows >= target - monthlyCull * 1.5;
+    const keepPerMonth = monthlyCull * keepRatio;
+
     if (P.remontMode === 'own') {
-      const avail = heifers[saleAge];
-      const keep = cows < target * 0.98
-        ? avail
-        : Math.min(avail, cows * (P.cullRate / 100) / 12 * 1.3);
-      heifers[saleAge] = keep;
-      acc.calvesSoldF += Math.max(0, avail - keep);
+      if (cullAge <= saleAge) {
+        const avail = heifers[saleAge];
+        const keep = atCapacity ? Math.min(avail, keepPerMonth) : avail;
+        heifers[saleAge] = keep;
+        acc.calvesSoldF += Math.max(0, avail - keep);
+      } else {
+        /* до возраста выбраковки держим всех, потом отбираем */
+        const avail = heifers[cullAge];
+        if (avail > 0) {
+          const keep = atCapacity ? Math.min(avail, keepPerMonth) : avail;
+          heifers[cullAge] = keep;
+          const sold = Math.max(0, avail - keep);
+          acc.heifersCulled += sold;
+          acc.heifersCulledAge = cullAge;
+        }
+      }
     } else {
       acc.calvesSoldF += heifers[saleAge];
       heifers[saleAge] = 0;
@@ -231,6 +254,7 @@ MTF.calcHerd = function (p) {
         milkPerCow: cows > 0 ? acc.milkLiters / cows : 0,
         calvesSold: acc.calvesSoldM + acc.calvesSoldF,
         surplusSold: acc.surplusSold,
+        heifersCulled: acc.heifersCulled,
         cullSold: acc.cullSold,
         bullsSold: acc.bullsSold,
         bullWeightKg: acc.bullWeightKg,
