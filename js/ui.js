@@ -158,8 +158,8 @@ MTF.renderInputs = function (res) {
     field('Доля тёлочек в приплоде', 'production.heiferShare', '%') +
     field('Возраст первого отёла', 'production.firstCalvingMo', 'мес') +
     field('Возраст продажи телят', 'production.calfSaleAgeMo', 'мес') +
-    field('Возраст выбраковки тёлок', 'production.heiferCullAgeMo', 'мес') +
     field('Оставлять на ремонт', 'production.heiferKeepRatio', '% к норме') +
+    MTF.renderSalePlan(res) +
     '<h4>Сценарии</h4>' +
     field('Ремонт стада', 'production.remontMode', '', 'select',
       [['own', 'Свой молодняк'], ['purchase', 'Покупка нетелей'], ['outsource', 'Сторонняя площадка']]) +
@@ -203,13 +203,54 @@ MTF.renderInputs = function (res) {
     field('Молоко', 'prices.milk', '₸/л') +
     field('Телёнок', 'prices.calf', 'т.₸') +
     field('Выбракованная корова', 'prices.cullCow', 'т.₸') +
-    field('Сверхремонтная тёлка', 'prices.heiferYoung', 'т.₸') +
     (P.production.bullMode !== 'sell_calf' ? field('Бычок, живой вес', 'prices.bullKg', '₸/кг') : '') +
     field('Рост цен реализации', 'prices.priceInflation', '%/год') +
     field('Рост затрат', 'prices.costInflation', '%/год') +
     '</div>' +
 
     '</div>';
+};
+
+/* ---------- График продажи сверхремонтных тёлок ---------- */
+MTF.renderSalePlan = function (res) {
+  const P = MTF.state.params, f = MTF.fmt;
+  const mode = P.production.salePlanMode || 'late';
+  const preset = MTF.salePlanPresets[mode] || MTF.salePlanPresets.late;
+  const plan = MTF.salePlan(P.production);
+  const custom = mode === 'custom';
+
+  const last = res.herd[res.herd.length - 1];
+  const sales = last.heiferSales || {};
+  const sum = Object.keys(sales).reduce((a, k) => a + sales[k], 0);
+  const shareSum = plan.reduce((a, s) => a + (s.share || 0), 0);
+
+  const rows = plan.map((st, i) =>
+    '<tr>' +
+    '<td><input type="number" data-spa="' + i + '" value="' + st.age +
+      '" step="1" style="width:56px"' + (custom ? '' : ' disabled') + '></td>' +
+    '<td><input type="number" data-sps="' + i + '" value="' + st.share +
+      '" step="any" style="width:60px"' + (custom ? '' : ' disabled') + '></td>' +
+    '<td><input type="number" data-spp="' + i + '" value="' + st.price +
+      '" step="any" style="width:82px"' + (custom ? '' : ' disabled') + '></td>' +
+    '<td class="n">' + f.num(sales[Math.max(P.production.calfSaleAgeMo, st.age)] || 0) + '</td>' +
+    '<td>' + (custom ? '<button class="del" data-spdel="' + i + '">×</button>' : '') + '</td></tr>').join('');
+
+  return '<h4>Продажа сверхремонтных тёлок</h4>' +
+    '<div class="f wide"><label>Схема продажи</label><select data-p="production.salePlanMode">' +
+    Object.keys(MTF.salePlanPresets).map(k => '<option value="' + k + '"' +
+      (k === mode ? ' selected' : '') + '>' + MTF.salePlanPresets[k].name + '</option>').join('') +
+    '</select></div>' +
+    '<div class="hint" style="margin:4px 0 10px">' + preset.hint + '</div>' +
+    '<div class="tw"><table><thead><tr><th>Возраст, мес</th><th>Доля, %</th>' +
+    '<th>Цена, т.₸</th><th>Продано в ' + last.year + '</th><th></th></tr></thead><tbody>' +
+    rows +
+    '<tr class="tot"><td>Итого</td><td class="n">' + f.num(shareSum) + '%</td><td></td>' +
+    '<td class="n">' + f.num(sum) + '</td><td></td></tr></tbody></table></div>' +
+    (custom ? '<button class="btn" id="addSaleStep" style="margin-top:8px">Добавить ступень</button>' : '') +
+    (Math.abs(shareSum - 100) > 0.5
+      ? '<div class="note warn">Доли дают ' + f.num(shareSum) + '% вместо 100%.</div>' : '') +
+    '<div class="hint">Доли применяются к месячному избытку тёлочек — тому, что остаётся ' +
+    'сверх потребности на ремонт стада. Пока стадо не вышло на мощность, продажи нет.</div>';
 };
 
 /* ---------- 2. Стадо ---------- */
@@ -710,6 +751,23 @@ MTF.bind = function () {
   bindArr('[data-staff]', el => S.staff[el.dataset.staff][el.dataset.fld] = parseFloat(el.value) || 0);
   bindArr('[data-subval]', el => S.subsidies[el.dataset.subval].value = parseFloat(el.value) || 0);
   bindArr('[data-sub]', el => S.subsidies[el.dataset.sub].enabled = el.checked);
+  const toCustom = () => {
+    const P = S.params.production;
+    if (P.salePlanMode !== 'custom') {
+      P.salePlan = JSON.parse(JSON.stringify(MTF.salePlan(P)));
+      P.salePlanMode = 'custom';
+    }
+  };
+  bindArr('[data-spa]', el => { toCustom(); S.params.production.salePlan[el.dataset.spa].age = Math.max(1, Math.round(parseFloat(el.value) || 1)); });
+  bindArr('[data-sps]', el => { toCustom(); S.params.production.salePlan[el.dataset.sps].share = parseFloat(el.value) || 0; });
+  bindArr('[data-spp]', el => { toCustom(); S.params.production.salePlan[el.dataset.spp].price = parseFloat(el.value) || 0; });
+  document.querySelectorAll('[data-spdel]').forEach(el =>
+    el.onclick = () => { S.params.production.salePlan.splice(+el.dataset.spdel, 1); MTF.save(); MTF.render(); });
+  const addStep = document.getElementById('addSaleStep');
+  if (addStep) addStep.onclick = () => {
+    S.params.production.salePlan.push({ age: 6, share: 0, price: 220 });
+    MTF.save(); MTF.render();
+  };
   bindArr('[data-sec]', el => {
     S.docSections[el.dataset.sec].enabled = el.checked;
     S.docMode = 'custom';
