@@ -78,6 +78,11 @@ MTF.defaults = {
     remontMode: 'own',
     bullMode: 'sell_calf',
     calfSaleAgeMo: 2,
+    heiferKeepRatio: 130,      // оставлять на ремонт, % к годовой потребности
+    salePlanMode: 'late',      // early | late | steps | custom
+    salePlan: [                // график продажи сверхремонтных тёлок
+      { age: 12, share: 100, price: 400 }
+    ],
     fattenAgeMo: 16,
     fattenWeightKg: 450
   },
@@ -262,4 +267,37 @@ MTF.groupCur = function (p, g) {
 };
 MTF.groupSign = function (p, g) {
   return (MTF.currencies[MTF.groupCur(p, g)] || MTF.currencies.KZT).sign;
+};
+
+
+/* ---------- Готовые графики продажи сверхремонтных тёлок ----------
+   age   — возраст продажи, месяцев
+   share — доля избытка, %
+   price — цена за голову, тыс. ₸
+------------------------------------------------ */
+MTF.salePlanPresets = {
+  early: {
+    name: 'Ранняя продажа — всё телятами',
+    hint: 'Минимум мест под молодняк, минимум выручки. Корма не тратятся.',
+    plan: [{ age: 2, share: 100, price: 95 }]
+  },
+  late: {
+    name: 'Поздняя продажа — всё в год',
+    hint: 'Максимум выручки, но молодняк занимает места два года подряд.',
+    plan: [{ age: 12, share: 100, price: 400 }]
+  },
+  steps: {
+    name: 'Три ступени — 2, 6 и 12 месяцев',
+    hint: 'Компромисс: часть уходит рано и разгружает помещения, часть доращивается.',
+    plan: [
+      { age: 2, share: 34, price: 95 },
+      { age: 6, share: 33, price: 220 },
+      { age: 12, share: 33, price: 400 }
+    ]
+  },
+  custom: {
+    name: 'Свой график',
+    hint: 'Возраст, доля и цена задаются вручную. Строки добавляются и удаляются.',
+    plan: null
+  }
 };
