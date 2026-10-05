@@ -136,8 +136,17 @@ MTF.calcRevenue = function (p, herdYears) {
     detail['Молоко'] = y.milkLiters * p.prices.milk * k / 1000;
     if (y.calvesSold > 0) detail['Реализация телят'] = y.calvesSold * p.prices.calf * k;
     if (y.cullSold > 0) detail['Выбракованные коровы'] = y.cullSold * p.prices.cullCow * k;
-    if (y.heifersCulled > 0)
-      detail['Продажа сверхремонтных тёлок'] = y.heifersCulled * p.prices.heiferYoung * k;
+    /* Продажа сверхремонтных тёлок по графику: у каждой ступени своя цена */
+    if (y.heiferSales) {
+      const plan = MTF.salePlan(p.production);
+      let sum = 0;
+      Object.keys(y.heiferSales).forEach(a => {
+        const step = plan.find(x => String(Math.max(p.production.calfSaleAgeMo, x.age)) === String(a))
+          || plan[plan.length - 1];
+        sum += y.heiferSales[a] * (step ? step.price : 0);
+      });
+      if (sum > 0) detail['Продажа сверхремонтных тёлок'] = sum * k;
+    }
     if (y.surplusSold > 0)
       detail['Сверхремонтные нетели'] = y.surplusSold * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.85 * k;
     if (y.bullsSold > 0) detail['Реализация бычков'] = y.bullWeightKg * p.prices.bullKg * k / 1000;
