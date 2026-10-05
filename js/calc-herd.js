@@ -6,6 +6,18 @@
 
 window.MTF = window.MTF || {};
 
+/* График продажи сверхремонтных тёлок: пресет или свой.
+   Возвращает массив ступеней {age, share, price}. */
+MTF.salePlan = function (P) {
+  const mode = P.salePlanMode || 'late';
+  if (mode !== 'custom' && MTF.salePlanPresets && MTF.salePlanPresets[mode]
+      && MTF.salePlanPresets[mode].plan) {
+    return MTF.salePlanPresets[mode].plan;
+  }
+  return (P.salePlan && P.salePlan.length) ? P.salePlan
+    : [{ age: 12, share: 100, price: 400 }];
+};
+
 /* Межотёльный период в днях */
 MTF.calvingInterval = function (P) {
   return 365 * 100 / Math.max(1, P.calvingRate);
@@ -91,7 +103,7 @@ MTF.calcHerd = function (p) {
       milkLiters: 0, calvings: 0, calvesBorn: 0,
       calvesSoldM: 0, calvesSoldF: 0, cullSold: 0,
       bullsSold: 0, bullWeightKg: 0,
-      heifersPurchased: 0, surplusSold: 0, heifersCulled: 0, heifersCulledAge: 0,
+      heifersPurchased: 0, surplusSold: 0, heifersCulled: 0, heiferSales: {},
       warnings: []
     };
   }
@@ -149,11 +161,14 @@ MTF.calcHerd = function (p) {
 
     const saleAge = Math.max(1, P.calfSaleAgeMo);
 
-    /* Отбор тёлочек. Возраст выбраковки задаётся отдельно от возраста
-       продажи телят: до него тёлочки растут, после — лишние уходят.
-       Если возраст выбраковки не больше возраста продажи телят,
-       отбор идёт сразу на выходе из телятника, как раньше. */
-    const cullAge = Math.max(saleAge, Math.min(29, P.heiferCullAgeMo || saleAge));
+    /* ---------- Отбор сверхремонтных тёлок ----------
+       Избыток распределяется по графику продажи: несколько ступеней
+       с разным возрастом, долей и ценой. Доли применяются к тому,
+       что родилось, а не к остатку, поэтому на каждой ступени
+       отбирается своя часть приплода.
+
+       Пока стадо не вышло на проектную мощность, оставляются все
+       тёлочки — продавать нечего. */
     const keepRatio = (P.heiferKeepRatio || 130) / 100;
     /* Стадо считается вышедшим на мощность с допуском в полторы месячные
        выбраковки: поголовье колеблется вокруг цели, и жёсткий порог
@@ -163,22 +178,27 @@ MTF.calcHerd = function (p) {
     const keepPerMonth = monthlyCull * keepRatio;
 
     if (P.remontMode === 'own') {
-      if (cullAge <= saleAge) {
-        const avail = heifers[saleAge];
-        const keep = atCapacity ? Math.min(avail, keepPerMonth) : avail;
-        heifers[saleAge] = keep;
-        acc.calvesSoldF += Math.max(0, avail - keep);
-      } else {
-        /* до возраста выбраковки держим всех, потом отбираем */
-        const avail = heifers[cullAge];
-        if (avail > 0) {
-          const keep = atCapacity ? Math.min(avail, keepPerMonth) : avail;
-          heifers[cullAge] = keep;
-          const sold = Math.max(0, avail - keep);
-          acc.heifersCulled += sold;
-          acc.heifersCulledAge = cullAge;
-        }
-      }
+      const plan = MTF.salePlan(P);
+      /* Месячный избыток считается один раз от приплода тёлочек:
+         родилось минус то, что нужно оставить на ремонт. Доли ступеней
+         применяются к этому избытку, а не к остатку на каждом возрасте —
+         иначе поздние ступени оставались бы без поголовья. */
+      const monthSurplus = atCapacity ? Math.max(0, females - keepPerMonth) : 0;
+
+      plan.forEach(step => {
+        const a = Math.max(saleAge, Math.min(29, step.age));
+        const avail = heifers[a];
+        if (avail <= 0) return;
+
+        const quota = monthSurplus * step.share / 100;
+        const sold = Math.min(quota, avail);
+        if (sold <= 0) return;
+
+        heifers[a] = avail - sold;
+        if (a <= saleAge) acc.calvesSoldF += sold;
+        else acc.heifersCulled += sold;
+        acc.heiferSales[a] = (acc.heiferSales[a] || 0) + sold;
+      });
     } else {
       acc.calvesSoldF += heifers[saleAge];
       heifers[saleAge] = 0;
@@ -255,6 +275,7 @@ MTF.calcHerd = function (p) {
         calvesSold: acc.calvesSoldM + acc.calvesSoldF,
         surplusSold: acc.surplusSold,
         heifersCulled: acc.heifersCulled,
+        heiferSales: acc.heiferSales,
         cullSold: acc.cullSold,
         bullsSold: acc.bullsSold,
         bullWeightKg: acc.bullWeightKg,
