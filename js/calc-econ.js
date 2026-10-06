@@ -49,22 +49,70 @@ MTF.calcCapex = function (p, items) {
 };
 
 /* ---------- ФОТ ---------- */
+/* Блоки оплаты труда. Строка штата без поля block относится к блоку фермы
+   (так читаются проекты, сохранённые до появления блоков). */
+MTF.staffBlockIds = ['complex', 'farm', 'land'];
+MTF.staffBlockDefaults = {
+  complex: { name: 'АУП комплекса', scope: 'project', scale: false },
+  farm:    { name: 'АУП фермы и производственный персонал', scope: 'farm', scale: null },
+  land:    { name: 'Земельный фонд', scope: 'project', scale: false }
+};
+
+/* На сколько ферм делятся общие блоки */
+MTF.staffDivisor = function (p) {
+  const n = p.staff && p.staff.shareFarms;
+  return n > 0 ? n : Math.max(1, (p.project && p.project.farmsCount) || 1);
+};
+
+/* Параметры блока с учётом значений по умолчанию */
+MTF.staffBlockOf = function (p, id) {
+  const own = (p.staff && p.staff.blocks && p.staff.blocks[id]) || {};
+  return Object.assign({}, MTF.staffBlockDefaults[id], own);
+};
+
+/* ФОТ на одну ферму. blocks — разбивка по блокам для таблиц и документа.
+   Проект откорма (type = feedlot) считается по прежней схеме без блоков. */
 MTF.calcPayroll = function (p, staff, cows) {
   const S = p.staff;
   if (S.mode === 'lump') {
-    return { net: S.lumpAnnual, gross: S.lumpAnnual, headcount: null };
+    return { net: S.lumpAnnual, gross: S.lumpAnnual, headcount: null, blocks: [] };
   }
-  let net = 0, hc = 0;
-  staff.forEach(s => { net += s.count * s.salary * 12; hc += s.count; });
-  let k = 1;
-  if (S.scaleToHerd && S.baseCows > 0 && cows > 0) {
-    k = Math.max(0.45, Math.min(1, cows / S.baseCows));
+  const taxK = 1 + MTF.payrollTaxRate / 100;
+
+  if (p.project && p.project.type === 'feedlot') {
+    let net = 0, hc = 0;
+    staff.forEach(s => { net += s.count * s.salary * 12; hc += s.count; });
+    let k = 1;
+    if (S.scaleToHerd && S.baseCows > 0 && cows > 0) {
+      k = Math.max(0.45, Math.min(1, cows / S.baseCows));
+    }
+    return { net: net * k, gross: net * k * taxK, headcount: Math.round(hc * k), blocks: [] };
   }
-  return {
-    net: net * k,
-    gross: net * k * (1 + MTF.payrollTaxRate / 100),
-    headcount: Math.round(hc * k)
-  };
+
+  const N = MTF.staffDivisor(p);
+  const blocks = MTF.staffBlockIds.map(function (id) {
+    const d = MTF.staffBlockOf(p, id);
+    const rows = staff.filter(s => (s.block || 'farm') === id);
+    let net0 = 0, hc0 = 0;
+    rows.forEach(s => { net0 += s.count * s.salary * 12; hc0 += s.count; });
+    const scaleOn = (d.scale === null || d.scale === undefined) ? !!S.scaleToHerd : !!d.scale;
+    let k = 1;
+    if (scaleOn && S.baseCows > 0 && cows > 0) k = Math.max(0.45, Math.min(1, cows / S.baseCows));
+    const div = d.scope === 'project' ? N : 1;
+    const netBlock = net0 * k;                 // весь блок
+    return {
+      id: id, name: d.name, scope: d.scope, scale: scaleOn, k: k, divisor: div,
+      rows: rows.length, headcountFull: hc0 * k,
+      netTotal: d.scope === 'project' ? netBlock : netBlock * N,     // на N ферм
+      grossTotal: (d.scope === 'project' ? netBlock : netBlock * N) * taxK,
+      net: netBlock / div,                     // на одну ферму
+      gross: netBlock / div * taxK,
+      headcount: hc0 * k / div
+    };
+  });
+  let net = 0, gross = 0, hc = 0;
+  blocks.forEach(b => { net += b.net; gross += b.gross; hc += b.headcount; });
+  return { net: net, gross: gross, headcount: Math.round(hc), blocks: blocks, farms: N };
 };
 
 /* ---------- Корма ---------- */
@@ -107,6 +155,7 @@ MTF.calcOpex = function (p, herdYears, staff, opexItems) {
       let v = 0;
       if (it.base === 'head') v = it.value * y.total;
       else if (it.base === 'cow') v = it.value * y.cows;
+      else if (it.base === 'young') v = it.value * (y.heifers + y.calves + y.bulls);
       else if (it.base === 'sum') v = it.value;
       else if (it.base === 'milk') v = it.value * y.milkLiters / 1000;
       if (v > 0) detail[it.name] = v * k;
@@ -139,9 +188,11 @@ MTF.calcRevenue = function (p, herdYears) {
     const detail = {};
     detail['Молоко'] = y.milkLiters * p.prices.milk * k / 1000;
     if (y.calvesSold > 0) detail['Реализация телят'] = y.calvesSold * p.prices.calf * k;
+    if (y.heifersSoldValue > 0) detail['Реализация тёлок'] = y.heifersSoldValue * k;
     if (y.cullSold > 0) detail['Выбракованные коровы'] = y.cullSold * p.prices.cullCow * k;
     if (y.surplusSold > 0)
-      detail['Сверхремонтные нетели'] = y.surplusSold * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) * 0.85 * k;
+      detail['Сверхремонтные нетели'] = y.surplusSold * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) *
+        ((p.herd.surplusHeiferPct === undefined ? 85 : p.herd.surplusHeiferPct) / 100) * k;
     if (y.bullsSold > 0) detail['Реализация бычков'] = y.bullWeightKg * p.prices.bullKg * k / 1000;
 
     const total = Object.values(detail).reduce((a, b) => a + b, 0);
@@ -214,4 +265,21 @@ MTF.calcPnL = function (p, herdYears, capex, staff, opexItems, subsidies) {
       revDetail: rev[i].detail, opexDetail: opex[i].detail, subDetail: sub[i].detail
     };
   });
+};
+
+/* Обслуживание стада в расчёте на одну фуражную корову в год
+   (по статьям с кодом care_, при проектной мощности). */
+MTF.careCostPerCow = function (p, res, items) {
+  const list = (items || []).filter(function (it) { return String(it.id || '').indexOf('care_') === 0; });
+  const y = res && res.herd && res.herd.length ? res.herd[res.herd.length - 1] : null;
+  if (!y || !(y.cows > 0)) return { perCow: 0, count: list.length };
+  let sum = 0;
+  list.forEach(function (it) {
+    if (it.base === 'cow') sum += it.value;
+    else if (it.base === 'head') sum += it.value * y.total / y.cows;
+    else if (it.base === 'young') sum += it.value * (y.heifers + y.calves + y.bulls) / y.cows;
+    else if (it.base === 'milk') sum += it.value * y.milkLiters / 1000 / y.cows;
+    else if (it.base === 'sum') sum += it.value / y.cows;
+  });
+  return { perCow: sum, count: list.length };
 };
