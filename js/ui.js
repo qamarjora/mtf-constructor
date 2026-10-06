@@ -94,6 +94,104 @@ function curField(label, path, curPath) {
     '</select></div>';
 }
 
+/* ---------- Блоки интерфейса, вынесенные из вкладок ---------- */
+function escHtml(v) {
+  return String(v === null || v === undefined ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* Схема продажи лишних тёлок: выбор готовой схемы и таблица ступеней */
+function salePlanBlock(P) {
+  if (P.production.remontMode !== 'own') return '';
+  const presets = MTF.salePlanPresets || {};
+  const mode = P.production.salePlanMode || 'early';
+  const saleAge = Math.max(1, P.production.calfSaleAgeMo || 2);
+  const plan = Array.isArray(P.production.salePlan) ? P.production.salePlan : [];
+  const total = plan.reduce(function (a, r) { return a + (+r.share || 0); }, 0);
+  const rows = plan.map(function (r, i) {
+    const atCalf = (+r.age || 0) <= saleAge;
+    return '<tr><td><input type="number" data-spa="' + i + '" value="' + r.age + '" step="1" style="width:62px"></td>' +
+      '<td><input type="number" data-sps="' + i + '" value="' + r.share + '" step="any" style="width:66px"></td>' +
+      '<td>' + (atCalf
+        ? '<span class="hint" style="margin:0">цена телёнка (' + MTF.fmt.num(P.prices.calf) + ')</span>'
+        : '<input type="number" data-spp="' + i + '" value="' + r.price + '" step="any" style="width:84px">') + '</td>' +
+      '<td><button class="del" data-spdel="' + i + '">×</button></td></tr>';
+  }).join('');
+  return '<h4>Продажа лишних тёлок</h4>' +
+    '<div class="f wide"><label>Схема</label><select data-spmode>' +
+    Object.keys(presets).map(function (k) {
+      return '<option value="' + k + '"' + (k === mode ? ' selected' : '') + '>' + presets[k].name + '</option>';
+    }).join('') + '</select></div>' +
+    '<div class="tw"><table><thead><tr><th>Возраст, мес.</th><th>Доля, %</th><th>Цена, тыс. ₸</th><th></th></tr></thead><tbody>' +
+    rows + '</tbody></table></div>' +
+    '<button class="btn" id="addSaleRow" style="margin-top:8px">Добавить ступень</button>' +
+    (Math.abs(total - 100) > 0.5 && plan.length
+      ? '<div class="note warn" style="margin-top:8px">Доли дают ' + MTF.fmt.num(total, 1) + '%, при расчёте они приводятся к 100%.</div>' : '') +
+    '<div class="hint">Продаются только тёлки сверх нужного для ремонта стада. Пока стадо не вышло на мощность, остаются все. ' +
+    'До продажи тёлки занимают места молодняка и потребляют корма, поэтому чем позже продажа, тем больше нужно помещений.</div>';
+}
+
+/* Оплата труда тремя блоками: АУП комплекса, АУП фермы, земельный фонд */
+function staffBlocksHtml(P, res) {
+  const f = MTF.fmt, S = MTF.state;
+  const N = MTF.staffDivisor(P);
+  const cows = res && res.herd && res.herd.meta ? res.herd.meta.target : P.capacity.cowPlaces + P.capacity.dryPlaces;
+  const pr = MTF.calcPayroll(P, S.staff, cows);
+  const blockOpts = function (cur) {
+    return MTF.staffBlockIds.map(function (b) {
+      return '<option value="' + b + '"' + (b === cur ? ' selected' : '') + '>' + escHtml(MTF.staffBlockOf(P, b).name) + '</option>';
+    }).join('');
+  };
+  const sections = pr.blocks.map(function (b) {
+    const idx = S.staff.map(function (s, i) { return [s, i]; }).filter(function (x) { return (x[0].block || 'farm') === b.id; });
+    const rows = idx.map(function (x) {
+      const s = x[0], i = x[1];
+      return '<tr><td><input type="text" data-stn="' + i + '" value="' + escHtml(s.name) + '" style="width:100%;text-align:left;font-family:var(--sans)"></td>' +
+        '<td><select data-stb="' + i + '" style="max-width:150px">' + blockOpts(b.id) + '</select></td>' +
+        '<td><input type="number" data-staff="' + i + '" data-fld="count" value="' + s.count + '" step="any" style="width:56px"></td>' +
+        '<td><input type="number" data-staff="' + i + '" data-fld="salary" value="' + s.salary + '" step="any" style="width:76px"></td>' +
+        '<td class="n">' + f.num(s.count * s.salary * 12, 1) + '</td>' +
+        '<td><button class="del" data-delstaff="' + i + '">×</button></td></tr>';
+    }).join('');
+    const empty = idx.length === 0;
+    const unfilled = !empty && b.netTotal === 0;
+    return '<div style="margin:20px 0 4px;padding-top:14px;border-top:1px solid var(--line)">' +
+      '<div class="f wide"><label><b>Блок</b></label><input type="text" data-blkn="' + b.id + '" value="' + escHtml(b.name) + '"></div>' +
+      '<div class="f wide"><label>Как считается</label><select data-blks="' + b.id + '">' +
+        '<option value="project"' + (b.scope === 'project' ? ' selected' : '') + '>на весь проект, делится на ' + N + ' ферм</option>' +
+        '<option value="farm"' + (b.scope === 'farm' ? ' selected' : '') + '>на каждую ферму</option></select></div>' +
+      '<div class="f"><label>Масштабировать под поголовье</label>' +
+        '<input type="checkbox" data-blksc="' + b.id + '"' + (b.scale ? ' checked' : '') + ' style="width:18px;height:18px"><span class="u"></span></div>' +
+      (empty ? '<div class="note warn">В блоке нет должностей.</div>' :
+        '<div class="tw"><table><thead><tr><th>Должность</th><th>Блок</th><th>Кол-во</th><th>Оклад, т.₸</th><th>В год</th><th></th></tr></thead><tbody>' +
+        rows +
+        '<tr class="sub"><td>С начислениями ' + MTF.payrollTaxRate + '%: на проект (' + N + ' ферм)</td><td></td><td></td><td></td><td class="n">' + f.num(b.grossTotal, 1) + '</td><td></td></tr>' +
+        '<tr class="tot"><td>С начислениями: на одну ферму</td><td></td><td></td><td></td><td class="n">' + f.num(b.gross, 1) + '</td><td></td></tr>' +
+        '</tbody></table></div>') +
+      (unfilled ? '<div class="note warn" style="margin-top:8px">Блок не заполнен: впишите количество и оклады, пока он ничего не стоит.</div>' : '') +
+      '<div class="row" style="margin-top:10px;margin-bottom:0">' +
+        '<button class="btn" data-addstaff="' + b.id + '">Добавить должность</button>' +
+        (empty || b.id !== 'farm' ? '<button class="btn" data-addstd="' + b.id + '">Добавить типовые должности</button>' : '') +
+      '</div></div>';
+  }).join('');
+
+  return sections +
+    '<div class="tw" style="margin-top:18px"><table><thead><tr><th>Итого</th><th>Всего на проект</th><th>На одну ферму</th></tr></thead><tbody>' +
+    pr.blocks.map(function (b) {
+      return '<tr><td>' + escHtml(b.name) + '</td><td class="n">' + f.num(b.grossTotal, 1) + '</td><td class="n">' + f.num(b.gross, 1) + '</td></tr>';
+    }).join('') +
+    '<tr class="tot"><td>ФОТ с начислениями</td><td class="n">' + f.num(pr.gross * N, 1) + '</td><td class="n">' + f.num(pr.gross, 1) + '</td></tr>' +
+    '</tbody></table></div>' +
+    '<div class="f" style="margin-top:12px"><label>Делить общие блоки на</label>' +
+      '<input type="number" data-p="staff.shareFarms" value="' + (P.staff.shareFarms || 0) + '" step="1"><span class="u">ферм</span></div>' +
+    '<div class="hint" style="margin-top:0">Ноль означает «по количеству ферм» (сейчас ' + (P.project.farmsCount || 1) + '). ' +
+      'Если считаете первую очередь одной фермой, поставьте 1: весь общий АУП ляжет на неё.</div>' +
+    field('Расписание составлено на', 'staff.baseCows', 'гол') +
+    '<div class="hint">Масштабирование уменьшает численность пропорционально фактическому стаду, но не ниже 45% штата. ' +
+      'Общие блоки обычно не зависят от поголовья одной фермы, поэтому по умолчанию масштабируется только блок фермы. ' +
+      'Должность можно перенести в другой блок выпадающим списком.</div>';
+}
+
 /* ---------- 1. Вводные ---------- */
 MTF.renderInputs = function (res) {
   const P = MTF.state.params;
@@ -166,7 +264,9 @@ MTF.renderInputs = function (res) {
     MTF.fmt.pct(meta.dryShare * 100, 0) + '</b>, родилка <b>' +
     MTF.fmt.pct(meta.penShare * 100, 0) + '</b>.</div>' +
     field('Выход телят на 100 коров', 'production.calvingRate', 'гол') +
-    field('Выбраковка', 'production.cullRate', '%/год') +
+    field('Выбраковка, установившаяся', 'production.cullRate', '%/год') +
+    field('Выбраковка в первые годы', 'production.cullRateStart', '%/год') +
+    field('Сколько лет пониженная (0 — нет)', 'production.cullRateStartYears', 'лет') +
     field('Падёж телят', 'production.calfMortality', '%') +
     field('Падёж молодняка', 'production.heiferMortality', '%') +
     field('Дней сухостоя', 'production.dryDays', 'дн') +
@@ -176,6 +276,7 @@ MTF.renderInputs = function (res) {
     field('Доля тёлочек в приплоде', 'production.heiferShare', '%') +
     field('Возраст первого отёла', 'production.firstCalvingMo', 'мес') +
     field('Возраст продажи телят', 'production.calfSaleAgeMo', 'мес') +
+    field('Оставлять тёлок на ремонт', 'production.heiferKeepRatio', '% к норме') +
     '<h4>Сценарии</h4>' +
     field('Ремонт стада', 'production.remontMode', '', 'select',
       [['own', 'Свой молодняк'], ['purchase', 'Покупка нетелей'], ['outsource', 'Сторонняя площадка']]) +
@@ -185,6 +286,7 @@ MTF.renderInputs = function (res) {
       ? field('Возраст сдачи бычков', 'production.fattenAgeMo', 'мес') +
         field('Живой вес при сдаче', 'production.fattenWeightKg', 'кг')
       : '') +
+    salePlanBlock(P) +
     '</div>' +
 
     '<div class="card"><h3>Корма</h3>' +
@@ -219,6 +321,7 @@ MTF.renderInputs = function (res) {
     field('Молоко', 'prices.milk', '₸/л') +
     field('Телёнок', 'prices.calf', 'т.₸') +
     field('Выбракованная корова', 'prices.cullCow', 'т.₸') +
+    field('Сверхремонтная нетель, % от цены закупа', 'herd.surplusHeiferPct', '%') +
     (P.production.bullMode !== 'sell_calf' ? field('Бычок, живой вес', 'prices.bullKg', '₸/кг') : '') +
     field('Рост цен реализации', 'prices.priceInflation', '%/год') +
     field('Рост затрат', 'prices.costInflation', '%/год') +
@@ -255,6 +358,7 @@ MTF.renderHerd = function (res) {
     '<td class="n">' + f.num(y.milkLiters / 1000) + '</td>' +
     '<td class="n">' + f.num(y.milkPerCow) + '</td>' +
     '<td class="n">' + f.num(y.calvesSold) + '</td>' +
+    '<td class="n">' + f.num(y.heifersSold || 0) + '</td>' +
     '<td class="n">' + f.num(y.cullSold) + '</td>' +
     '<td class="n">' + f.num(y.heifersPurchased) + '</td>' +
     '<td class="n">' + f.num(y.flexUsed) + '</td></tr>').join('');
@@ -284,7 +388,7 @@ MTF.renderHerd = function (res) {
     '<div class="card" style="margin-top:14px"><h3>Движение поголовья по годам</h3><div class="tw"><table>' +
     '<thead><tr><th>Год</th><th>Фураж.</th><th>Дойные</th><th>Сухост.</th><th>Родилка</th><th>Телята</th>' +
     '<th>Молодн.</th><th>Бычки</th><th>Всего</th><th>Надой, т</th><th>л/фур.гол</th>' +
-    '<th>Прод. телят</th><th>Выбрак.</th><th>Закуп нет.</th><th>Гибк. места</th></tr></thead><tbody>' +
+    '<th>Прод. бычков</th><th>Прод. тёлок</th><th>Выбрак.</th><th>Закуп нет.</th><th>Гибк. места</th></tr></thead><tbody>' +
     rows + '</tbody></table></div></div>';
 };
 
@@ -389,7 +493,7 @@ MTF.renderEcon = function (res) {
   const staffBlock = P.staff.mode === 'lump'
     ? field('ФОТ с начислениями в год', 'staff.lumpAnnual', 'т.₸') +
       '<div class="hint">Штатное расписание не используется. Сумма индексируется на рост затрат.</div>'
-    : (function () {
+    : (MTF.isFeedlot && MTF.isFeedlot(P)) ? (function () {
         const rows = MTF.state.staff.map((s, i) =>
           '<tr><td><input type="text" data-stn="' + i + '" value="' + s.name + '" style="width:100%;text-align:left;font-family:var(--sans)"></td>' +
           '<td><input type="number" data-staff="' + i + '" data-fld="count" value="' + s.count + '" style="width:56px"></td>' +
@@ -406,7 +510,8 @@ MTF.renderEcon = function (res) {
           field('Масштабировать под поголовье', 'staff.scaleToHerd', '', 'check') +
           field('Расписание составлено на', 'staff.baseCows', 'гол') +
           '<div class="hint">При включённом масштабировании численность уменьшается пропорционально фактическому стаду, но не ниже 45% штата.</div>';
-      })();
+      })()
+    : staffBlocksHtml(P, res);
 
   const pnlRows = res.pnl.map(y =>
     '<tr><td class="n">' + y.year + '</td>' +
@@ -426,7 +531,7 @@ MTF.renderEcon = function (res) {
   const opexRows = MTF.state.opexItems.map((it, i) =>
     '<tr><td><input type="text" data-oxn="' + i + '" value="' + it.name + '" style="width:100%;text-align:left;font-family:var(--sans)"></td>' +
     '<td><select data-oxb="' + i + '">' +
-      [['head', 'На голову'], ['cow', 'На корову'], ['sum', 'Сумма'], ['milk', 'На литр']].map(b =>
+      [['head', 'На голову'], ['cow', 'На корову'], ['young', 'На молодняк'], ['sum', 'Сумма'], ['milk', 'На литр']].map(b =>
       '<option value="' + b[0] + '"' + (b[0] === it.base ? ' selected' : '') + '>' + b[1] + '</option>').join('') + '</select></td>' +
     '<td><input type="number" data-oxv="' + i + '" value="' + it.value + '" step="any" style="width:82px"></td>' +
     '<td><button class="del" data-oxdel="' + i + '">×</button></td></tr>').join('');
@@ -440,7 +545,17 @@ MTF.renderEcon = function (res) {
     '<div class="card"><h3>Прочие операционные расходы</h3><div class="tw"><table>' +
     '<thead><tr><th>Статья</th><th>База</th><th>Ставка</th><th></th></tr></thead><tbody>' + opexRows +
     '</tbody></table></div>' +
-    '<button class="btn" id="addOpex" style="margin-top:10px">Добавить статью</button></div>' +
+    '<div class="row" style="margin-top:10px;margin-bottom:0"><button class="btn" id="addOpex">Добавить статью</button>' +
+    (MTF.isFeedlot && MTF.isFeedlot(P) ? '' : '<button class="btn" id="addCareStd">Вернуть стандартные статьи обслуживания</button>') + '</div>' +
+    (MTF.isFeedlot && MTF.isFeedlot(P) ? '' : (function () {
+      const care = MTF.careCostPerCow(P, res, MTF.state.opexItems);
+      return care.count
+        ? '<div class="note ok" style="margin-top:10px">Обслуживание стада: <b>' + f.num(care.perCow, 1) +
+          ' тыс. ₸</b> на одну фуражную корову в год при проектной мощности (' + care.count + ' статей с кодом care_).</div>'
+        : '<div class="note warn" style="margin-top:10px">Статей обслуживания стада нет. Кнопка добавит ветпрепараты, ' +
+          'диагностику, семя и осеменение, уход за копытами и анализы.</div>';
+    })()) +
+    '<div class="hint">Ставки обслуживания стада заведены как ориентир и подлежат уточнению у зоотехника и ветеринара.</div></div>' +
     '</div>' +
 
     '<div class="card" style="margin-top:14px"><h3>Прогноз финансовых показателей</h3><div class="tw"><table>' +
@@ -752,6 +867,57 @@ MTF.bind = function () {
   bindArr('[data-oxb]', el => S.opexItems[el.dataset.oxb].base = el.value);
   bindArr('[data-stn]', el => S.staff[el.dataset.stn].name = el.value);
   bindArr('[data-staff]', el => S.staff[el.dataset.staff][el.dataset.fld] = parseFloat(el.value) || 0);
+
+  // оплата труда тремя блоками
+  const ensureBlk = id => {
+    const sp = S.params.staff;
+    sp.blocks = sp.blocks || {};
+    sp.blocks[id] = Object.assign({}, MTF.staffBlockOf(S.params, id), sp.blocks[id] || {});
+    return sp.blocks[id];
+  };
+  bindArr('[data-stb]', el => S.staff[el.dataset.stb].block = el.value);
+  bindArr('[data-blkn]', el => ensureBlk(el.dataset.blkn).name = el.value);
+  bindArr('[data-blks]', el => ensureBlk(el.dataset.blks).scope = el.value);
+  bindArr('[data-blksc]', el => ensureBlk(el.dataset.blksc).scale = el.checked);
+  document.querySelectorAll('[data-addstaff]').forEach(el => el.onclick = () => {
+    const b = el.dataset.addstaff, n = prompt('Название должности');
+    if (n) { S.staff.push({ id: 's' + Date.now(), block: b, name: n, count: 1, salary: b === 'farm' ? 400 : 0 }); upd(); }
+  });
+  document.querySelectorAll('[data-addstd]').forEach(el => el.onclick = () => {
+    const b = el.dataset.addstd;
+    (MTF.staffStandard[b] || []).forEach(r => {
+      if (!S.staff.some(x => x.id === r.id)) S.staff.push(Object.assign({ block: b }, r));
+    });
+    upd();
+  });
+
+  // график продажи лишних тёлок
+  const planOf = () => { S.params.production.salePlan = S.params.production.salePlan || []; return S.params.production.salePlan; };
+  document.querySelectorAll('[data-spmode]').forEach(el => el.onchange = () => {
+    const pr = S.params.production, v = el.value, pre = MTF.salePlanPresets[v];
+    pr.salePlanMode = v;
+    if (pre && pre.plan) pr.salePlan = JSON.parse(JSON.stringify(pre.plan));
+    upd();
+  });
+  bindArr('[data-spa]', el => { planOf()[el.dataset.spa].age = Math.max(1, Math.round(parseFloat(el.value) || 1)); S.params.production.salePlanMode = 'custom'; });
+  bindArr('[data-sps]', el => { planOf()[el.dataset.sps].share = Math.max(0, parseFloat(el.value) || 0); S.params.production.salePlanMode = 'custom'; });
+  bindArr('[data-spp]', el => { planOf()[el.dataset.spp].price = Math.max(0, parseFloat(el.value) || 0); S.params.production.salePlanMode = 'custom'; });
+  document.querySelectorAll('[data-spdel]').forEach(el => el.onclick = () => {
+    planOf().splice(+el.dataset.spdel, 1); S.params.production.salePlanMode = 'custom'; upd();
+  });
+  const addSale = document.getElementById('addSaleRow');
+  if (addSale) addSale.onclick = () => {
+    planOf().push({ age: 12, share: 0, price: 400 }); S.params.production.salePlanMode = 'custom'; upd();
+  };
+
+  // стандартные статьи обслуживания стада
+  const addCare = document.getElementById('addCareStd');
+  if (addCare) addCare.onclick = () => {
+    MTF.careStandard.forEach(c => {
+      if (!S.opexItems.some(x => x.id === c.id)) S.opexItems.push(JSON.parse(JSON.stringify(c)));
+    });
+    upd();
+  };
   bindArr('[data-subval]', el => S.subsidies[el.dataset.subval].value = parseFloat(el.value) || 0);
   bindArr('[data-sub]', el => S.subsidies[el.dataset.sub].enabled = el.checked);
   bindArr('[data-sec]', el => {
