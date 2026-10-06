@@ -78,9 +78,9 @@ MTF.export.expCsv = function () {
   const r = MTF.lastResult, rows = [], add = a => rows.push(a.join(';'));
 
   add(['ДВИЖЕНИЕ СТАДА']);
-  add(['Год', 'Фуражные', 'Дойные', 'Сухостой', 'Телята', 'Молодняк', 'Бычки', 'Всего', 'Надой, л', 'Прод. телят', 'Выбраковка', 'Закуп нетелей']);
+  add(['Год', 'Фуражные', 'Дойные', 'Сухостой', 'Телята', 'Молодняк', 'Бычки', 'Всего', 'Надой, л', 'Прод. бычков', 'Прод. тёлок', 'Выбраковка', 'Закуп нетелей']);
   r.herd.forEach(y => add([y.year, ...['cows', 'milking', 'dry', 'calves', 'heifers', 'bulls', 'total'].map(k => Math.round(y[k])),
-    Math.round(y.milkLiters), Math.round(y.calvesSold), Math.round(y.cullSold), Math.round(y.heifersPurchased)]));
+    Math.round(y.milkLiters), Math.round(y.calvesSold), Math.round(y.heifersSold || 0), Math.round(y.cullSold), Math.round(y.heifersPurchased)]));
 
   add([]); add(['ФИНАНСОВЫЕ ПОКАЗАТЕЛИ, тыс. тенге']);
   add(['Год', 'Выручка', 'Субсидии', 'Затраты', 'Оператор', 'EBITDA', 'Маржа %', 'Себестоимость литра']);
