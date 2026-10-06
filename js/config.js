@@ -5,7 +5,7 @@
 
 window.MTF = window.MTF || {};
 
-MTF.VERSION = '1.2.0';
+MTF.VERSION = '1.3.0';
 
 /* ---------- Валюты ----------
    base — валюта расчёта. Все суммы приводятся к ней.
@@ -57,14 +57,17 @@ MTF.defaults = {
     breed: 'Голштинская',
     source: 'Импорт',
     restockMode: 'none',     // none | to_capacity — докуп нетелей по годам
-    restockYears: 3
+    restockYears: 3,
+    surplusHeiferPct: 85,    // цена сверхремонтной нетели, % от цены закупа
   },
 
   production: {
     yieldMode: 'year',       // year | lactation | daily
     milkYield: 8000,
     calvingRate: 78,
-    cullRate: 26,
+    cullRate: 26,              // выбраковка в установившемся режиме, % в год
+    cullRateStart: 10,         // выбраковка в первые годы, % в год
+    cullRateStartYears: 0,     // сколько первых лет действует пониженная выбраковка (0 = не используется)
     calfMortality: 8,
     heiferMortality: 4,
     dryDays: 60,
@@ -78,6 +81,9 @@ MTF.defaults = {
     remontMode: 'own',
     bullMode: 'sell_calf',
     calfSaleAgeMo: 2,
+    heiferKeepRatio: 130,      // сколько тёлок оставлять на ремонт, % к годовой потребности
+    salePlanMode: 'early',     // схема продажи лишних тёлок: early | steps | late | custom
+    salePlan: [{ age: 2, share: 100, price: 0 }],   // график продажи: возраст, мес. / доля, % / цена, тыс. ₸
     fattenAgeMo: 16,
     fattenWeightKg: 450
   },
@@ -101,8 +107,14 @@ MTF.defaults = {
   staff: {
     mode: 'detailed',        // detailed | lump
     lumpAnnual: 0,           // ФОТ одной суммой, тыс. ₸ в год
-    scaleToHerd: false,      // масштабировать штат под фактическое поголовье
-    baseCows: 472            // поголовье, под которое составлено расписание
+    scaleToHerd: true,       // масштабировать штат под фактическое поголовье (для блока, где не задано своё)
+    baseCows: 472,           // поголовье, под которое составлено расписание
+    shareFarms: 0,           // на сколько ферм делить общие блоки (0 = по количеству ферм)
+    blocks: {                // три блока оплаты труда; scale: null — взять общую галочку scaleToHerd
+      complex: { name: 'АУП комплекса', scope: 'project', scale: false },
+      farm:    { name: 'АУП фермы и производственный персонал', scope: 'farm', scale: null },
+      land:    { name: 'Земельный фонд', scope: 'project', scale: false }
+    }
   },
 
   prices: {
@@ -195,25 +207,58 @@ MTF.capexItems = [
 MTF.capexReserve = 7;
 
 /* ---------- Штатное расписание ---------- */
-MTF.staff = [
-  { id: 'director',  name: 'Управляющий фермой',        count: 1,  salary: 900 },
-  { id: 'zootech',   name: 'Зоотехник',                 count: 1,  salary: 700 },
-  { id: 'vet',       name: 'Ветеринарный врач',         count: 1,  salary: 700 },
-  { id: 'inseminator', name: 'Техник-осеменатор',       count: 1,  salary: 600 },
-  { id: 'milker',    name: 'Оператор машинного доения', count: 6,  salary: 400 },
-  { id: 'cattleman', name: 'Скотник',                   count: 6,  salary: 350 },
-  { id: 'mechanic',  name: 'Механизатор',               count: 3,  salary: 450 },
-  { id: 'tech',      name: 'Слесарь-наладчик',          count: 2,  salary: 400 },
-  { id: 'accountant', name: 'Бухгалтер',                count: 1,  salary: 500 },
-  { id: 'security',  name: 'Охрана',                    count: 4,  salary: 300 }
-];
+/* Типовые должности по блокам. Блоки комплекса и земельного фонда
+   заведены пустыми (количество и оклады вносятся вручную). */
+MTF.staffStandard = {
+  complex: [
+    { id: 'c_mgr',  name: 'Управляющий комплекса',                     count: 0, salary: 0 },
+    { id: 'c_acc',  name: 'Бухгалтер',                                 count: 0, salary: 0 },
+    { id: 'c_mts',  name: 'Отдел материально-технического снабжения',  count: 0, salary: 0 },
+    { id: 'c_hr',   name: 'Отдел кадров',                              count: 0, salary: 0 },
+    { id: 'c_law',  name: 'Юрист-брокер',                              count: 0, salary: 0 }
+  ],
+  farm: [
+    { id: 'director',    name: 'Заведующий фермой',         count: 1, salary: 900 },
+    { id: 'zootech',     name: 'Зоотехник',                 count: 1, salary: 700 },
+    { id: 'vet',         name: 'Главный ветеринарный врач', count: 1, salary: 700 },
+    { id: 'hr_farm',     name: 'Управляющий персоналом',    count: 1, salary: 600 },
+    { id: 'inseminator', name: 'Техник-осеменатор',         count: 1, salary: 600 },
+    { id: 'milker',      name: 'Оператор машинного доения', count: 6, salary: 400 },
+    { id: 'cattleman',   name: 'Скотник',                   count: 6, salary: 350 },
+    { id: 'mechanic',    name: 'Механизатор',               count: 3, salary: 450 },
+    { id: 'tech',        name: 'Слесарь-наладчик',          count: 2, salary: 400 },
+    { id: 'security',    name: 'Охрана',                    count: 4, salary: 300 }
+  ],
+  land: [
+    { id: 'l_agro',  name: 'Старший агроном',  count: 0, salary: 0 },
+    { id: 'l_tract', name: 'Тракторист',       count: 0, salary: 0 },
+    { id: 'l_field', name: 'Полевой рабочий',  count: 0, salary: 0 }
+  ]
+};
+MTF.staff = [];
+['complex', 'farm', 'land'].forEach(function (b) {
+  MTF.staffStandard[b].forEach(function (r) {
+    MTF.staff.push(Object.assign({ block: b }, r));
+  });
+});
 
 MTF.payrollTaxRate = 35;
 
 /* ---------- Операционные расходы ----------
    base: head | cow | sum | milk
 ------------------------------------------------ */
-MTF.opexItems = [];
+/* Обслуживание стада: ориентировочные ставки, тыс. ₸ в год.
+   cow — на фуражную корову, young — на голову молодняка.
+   Значения заведены как ориентир и подлежат уточнению у зоотехника. */
+MTF.careStandard = [
+  { id: 'care_vet',   name: 'Ветеринарные препараты и вакцинация',      base: 'cow',   value: 28 },
+  { id: 'care_diag',  name: 'Ветеринарное обслуживание и диагностика',  base: 'cow',   value: 14 },
+  { id: 'care_young', name: 'Ветобслуживание молодняка',                base: 'young', value: 12 },
+  { id: 'care_semen', name: 'Семя и осеменение',                        base: 'cow',   value: 30 },
+  { id: 'care_hoof',  name: 'Обрезка и уход за копытами',               base: 'cow',   value: 4 },
+  { id: 'care_lab',   name: 'Лабораторные исследования стада',          base: 'cow',   value: 3 }
+];
+MTF.opexItems = JSON.parse(JSON.stringify(MTF.careStandard));
 
 /* Затраты на карантин: тыс. ₸ на голову единовременно */
 MTF.quarantineCostPerHead = 45;
@@ -258,4 +303,16 @@ MTF.groupCur = function (p, g) {
 };
 MTF.groupSign = function (p, g) {
   return (MTF.currencies[MTF.groupCur(p, g)] || MTF.currencies.KZT).sign;
+};
+
+/* ---------- Схемы продажи лишних тёлок ----------
+   plan: возраст в месяцах, доля от лишних тёлок в процентах и цена в тыс. ₸.
+   У строки, где возраст не больше возраста продажи телят, цена не вводится:
+   берётся цена телёнка из вкладки «Вводные». */
+MTF.salePlanPresets = {
+  early:  { name: 'Ранняя: всё в возрасте продажи телят', plan: [{ age: 2, share: 100, price: 0 }] },
+  steps:  { name: 'Три ступени: 2, 6 и 12 месяцев', plan: [
+            { age: 2, share: 33.4, price: 0 }, { age: 6, share: 33.3, price: 220 }, { age: 12, share: 33.3, price: 400 }] },
+  late:   { name: 'Поздняя: всё в 12 месяцев', plan: [{ age: 12, share: 100, price: 400 }] },
+  custom: { name: 'Свой график', plan: null }
 };
