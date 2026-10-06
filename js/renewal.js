@@ -203,7 +203,7 @@ MTF.calcRenewal = function (p, res, cycles) {
 
     t.renewalScheduleTable = rn.events.length
       ? tbl(['Год', 'Группа обновления', 'Доля', 'Сумма, тыс. ₸'],
-          rn.events.map(e => [f.num(e.year), e.name, f.pct(e.share, 0), f.num(e.amount)])
+          rn.events.map(e => [e.year, e.name, f.pct(e.share, 0), f.num(e.amount)])
             .concat([['<b>Итого за период</b>', '', '', '<b>' + f.num(rn.total) + '</b>']]))
       : '<p><i>В пределах горизонта расчёта обновление основных средств не наступает.</i></p>';
 
@@ -253,7 +253,7 @@ MTF.calcRenewal = function (p, res, cycles) {
     const sched = rn.events.length
       ? '<div class="tw"><table><thead><tr><th>Год</th><th>Группа</th><th>Доля</th>' +
         '<th>Сумма, тыс. ₸</th></tr></thead><tbody>' +
-        rn.events.map(e => '<tr><td class="n">' + f.num(e.year) + '</td><td>' + e.name +
+        rn.events.map(e => '<tr><td class="n">' + e.year + '</td><td>' + e.name +
           '</td><td class="n">' + f.pct(e.share, 0) + '</td><td class="n">' +
           f.num(e.amount) + '</td></tr>').join('') +
         '<tr class="tot"><td>Итого за период</td><td></td><td></td><td class="n">' +
