@@ -65,9 +65,12 @@
         'machinery', 'utilities', 'prep'],
       appendices: ['machinery', 'utilities', 'prep']
     },
+    /* Инвестиционный вид: «Участники» и «Источники финансирования» встроены в разделы
+       «Стоимость проекта» и «Структура сделки», «Обновление основных средств» — в «Финансовую
+       модель», консолидация заменена колонками «1 ферма | N ферм» в самих таблицах. */
     investment: {
-      sections: ['summary', 'concept', 'farm', 'herddyn', 'estimate', 'structure', 'deal', 'finmodel',
-        'renewal', 'consolidated', 'subsidycompare', 'operator', 'stages', 'risks', 'limits', 'disclaimer',
+      sections: ['summary', 'concept', 'farm', 'herddyn', 'estimate', 'deal', 'finmodel',
+        'subsidycompare', 'operator', 'stages', 'risks', 'limits', 'disclaimer',
         'equipment', 'machinery', 'utilities', 'staff', 'prep'],
       appendices: ['equipment', 'machinery', 'utilities', 'staff', 'prep']
     }
@@ -84,7 +87,7 @@
   /* ---------- Раздел «Резюме проекта» ---------- */
   const summary = {
     id: 'summary', title: 'Резюме проекта', enabled: false,
-    body: `{{summaryIntro}}\n\n**Ключевые показатели**\n\n{{summaryTable}}\n\n{{summaryNote}}`
+    body: `{{summaryIntro}}\n\n**Ключевые показатели**\n\n{{summaryTable}}\n\n{{summaryNote}}\n\n[УТОЧНИТЬ: условия участия инвестора — размер доли, срок, порядок выхода]`
   };
   if (!MTF.docSections.some(function (s) { return s.id === 'summary'; })) MTF.docSections.unshift(summary);
 
@@ -130,7 +133,7 @@
       Object.keys(data).forEach(function (k) { body = body.split('{{' + k + '}}').join(data[k]); });
       return body;
     };
-    let n = 0, a = 0;
+    let n = 0, a = 0, todo = 0;
     const out = [];
 
     main.concat(apps).forEach(function (s) {
@@ -147,8 +150,11 @@
         if (m) { n++; label = String(n); title = n + '. ' + m[2]; }
       }
       if (label) body = body.replace(/(^|\n)\*\*\d+\.(\d+)\./g, function (_, pre, k) { return pre + '**' + label + '.' + k + '.'; });
-      out.push({ title: title, body: (typeof mdLite === 'function' ? mdLite(body) : body), appendix: isApp(s) });
+      const html = (typeof mdLite === 'function' ? mdLite(body) : body)
+        .replace(/\[УТОЧНИТЬ[^\]]*\]/g, function (m) { todo++; return '<mark class="todo">' + m + '</mark>'; });
+      out.push({ title: title, body: html, appendix: isApp(s) });
     });
+    MTF._todoCount = todo;
     return out;
   };
 
@@ -196,5 +202,91 @@
         ? 'Подготовительный этап включён в стоимость проекта.'
         : 'Подготовительный этап (отдельный вклад инициаторов) в стоимость проекта и показатели не входит.');
     return t;
+  };
+  /* ---------- Блоки и таблицы для инвестиционного вида ---------- */
+  const cap = function (txt) { return '<p><i>' + txt + '</i></p>'; };
+  const html2 = function (head, rows) {
+    return '<table class="dt"><thead><tr>' + head.map(function (h, i) { return '<th' + (i > 0 ? ' class="r"' : '') + '>' + h + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + rows.map(function (r) { return '<tr>' + r.map(function (c, i) { return '<td' + (i > 0 ? ' class="r n"' : '') + '>' + c + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table>';
+  };
+  const cloneState = function (state) {
+    return Object.assign({}, state, {
+      params: JSON.parse(JSON.stringify(state.params)),
+      capexItems: JSON.parse(JSON.stringify(state.capexItems)),
+      subsidies: JSON.parse(JSON.stringify(state.subsidies))
+    });
+  };
+
+  const origTables2 = MTF.docTables;
+  MTF.docTables = function (state, res) {
+    const t = origTables2(state, res);
+    const p = state.params, f = MTF.fmt, N = Math.max(1, p.project.farmsCount || 1);
+    const inv = state.docMode === 'investment';
+    const tgt = res.herd.meta.target;
+    let iy = res.herd.findIndex(function (y) { return y.cows >= tgt * 0.99; });
+    if (iy < 0) iy = res.herd.length - 1;
+    const prepIn = MTF.prepModeOf && MTF.prepModeOf(p) === 'in_project';
+
+    // вознаграждение Оператора в деньгах: на ферму и на проект
+    const fee = res.pnl[iy].operatorFee || 0;
+    t.operatorFeeAmount = fee > 0
+      ? 'На мощности (' + res.pnl[iy].year + ' г.) оно составляет ' + f.num(fee) + ' тыс. ₸ в год на одну ферму и ' + f.num(fee * N) + ' тыс. ₸ на ' + N + ' ферм.'
+      : '';
+
+    // проект в целом по годам = одна ферма × N
+    t.projPnlBlock = cap('Проект в целом, ' + N + ' ферм, тыс. ₸ (одна ферма × ' + N + ')') +
+      html2(['Год', 'Выручка', 'Субсидии', 'Затраты', 'EBITDA', 'Платёж по кредиту', 'EBITDA после платежа'],
+        res.pnl.map(function (y, i) {
+          const pay = res.debt[i] ? res.debt[i].payment : 0, cost = y.opex + y.operatorFee;
+          return [y.year, f.num(y.revenue * N), f.num(y.subsidy * N), f.num(cost * N), f.num(y.ebitda * N),
+            f.num(pay * N), f.num((y.ebitda - pay) * N)];
+        }));
+
+    // чувствительность: каждый сценарий — полный пересчёт модели
+    const base = { npv: res.metrics.npv, irr: res.metrics.irr, d2: res.metrics.minDscrY2 };
+    const scen = [['Базовый сценарий', null],
+      ['Цена молока −10%', function (s) { s.params.prices.milk *= 0.9; }],
+      ['Капзатраты на строительство и оборудование +10%', function (s) {
+        s.capexItems.forEach(function (it) { if (it.group === 'build' || it.group === 'equip') it.value *= 1.1; }); }],
+      ['Ставка по кредиту +2 п.п.', function (s) { s.params.finance.rate += 2; }],
+      ['Без государственной поддержки', function (s) { s.subsidies.forEach(function (x) { x.enabled = false; }); }]];
+    t.riskSensTable = html2(['Сценарий', 'NPV, тыс. ₸', 'Изменение NPV', 'IRR', 'DSCR со 2-го года'],
+      scen.map(function (sc) {
+        let m = base;
+        if (sc[1]) {
+          const s2 = cloneState(state); sc[1](s2);
+          const r2 = MTF.runModel(s2); m = { npv: r2.metrics.npv, irr: r2.metrics.irr, d2: r2.metrics.minDscrY2 };
+        }
+        return [sc[0], f.num(m.npv), sc[1] ? (Math.abs(m.npv - base.npv) < 0.5 ? '0' : (m.npv - base.npv >= 0 ? '+' : '−') + f.num(Math.abs(m.npv - base.npv))) : '—',
+          m.irr !== null && m.irr !== undefined ? f.pct(m.irr * 100) : '—', isFinite(m.d2) ? f.num(m.d2, 2) : '—'];
+      }));
+    t.riskSensTable += '\n<p><i>Ставка по кредиту влияет на покрытие долга (DSCR), но не на NPV и IRR проекта. Значение DSCR ниже 1 означает, что операционного дохода не хватает на платежи по кредиту.</i></p>';
+
+    // блоки, которые подмешиваются только в инвестиционный вид
+    t.estimateTotalBlock = inv ? '' : '**Стоимость проекта в целом**\n\n' + (t.estimateTotalTable || '');
+    t.prepShortNote = prepIn
+      ? 'Подготовительный этап включён в стоимость проекта.'
+      : 'Подготовительный этап (расходы инициаторов до финансирования) в стоимость проекта не входит, его итоги — в разделе «Структура сделки».';
+    t.estimateFundingBlock = inv
+      ? ['**Источники финансирования**', t.fundingSourcesTable || '', t.prepShortNote,
+         '**Что требуется от инвестора**', t.investorRequestTable || '', t.structRequest || ''].join('\n\n')
+      : '';
+    t.prepDealBlock = [cap('Подготовительный этап, тыс. ₸: на одну ферму и на проект в целом'),
+      t.prepShareTable || '', t.prepModeNote || ''].join('\n\n');
+    t.finRenewalBlock = inv
+      ? ['**8.7. Обновление основных средств**', t.renewalIntro || '',
+         cap('Нормативные сроки службы, одна ферма'), t.renewalCyclesTable || '',
+         cap('График обновления, одна ферма, тыс. ₸'), t.renewalScheduleTable || '', t.renewalNote || ''].join('\n\n')
+      : '';
+    return t;
+  };
+
+  /* Счётчик мест «УТОЧНИТЬ» над документом */
+  const origTab = MTF.renderDocTab;
+  if (origTab) MTF.renderDocTab = function (res) {
+    const out = origTab.apply(this, arguments), n = MTF._todoCount || 0;
+    const note = n ? '<div class="note warn no-print">В документе мест, помеченных «УТОЧНИТЬ» (жёлтым): <b>' + n +
+      '</b>. Их нужно заполнить или подтвердить до отправки.</div>' : '';
+    return out.replace('<div class="doc-wrap">', note + '<div class="doc-wrap">');
   };
 })();
