@@ -179,11 +179,51 @@ else {
     const cap = w.MTF.runModel(st).capex.total;
     ok(sum.replace(/\s/g, '').indexOf(String(Math.round(cap * Nf))) >= 0, 'резюме: стоимость на ' + Nf + ' ферм = стоимость фермы × ' + Nf);
     const allTxt = secs.map(s => s.textContent).join(' ');
-    const rnSec = secs.find(s => /Обновление/.test(s.querySelector('h2').textContent)), rnTbl = rnSec && [...rnSec.querySelectorAll('table')].pop();
+    const rnTbl = [...w.document.querySelectorAll('#main .doc-prev table')].find(tb => /Группа обновления/.test(tb.querySelector('thead').textContent));
     const years = rnTbl ? [...rnTbl.querySelectorAll('tbody tr')].map(r => r.children[0].textContent.trim()) : [];
     const yr = years.filter(y => !/^Итого/.test(y));
     ok(yr.length > 0 && yr.every(y => /^\d{4}$/.test(y)), 'график обновления: годы без пробела (' + yr.slice(0, 3).join(', ') + ')');
     ok(!/NaN|undefined|Infinity|\{\{/.test(allTxt), 'в тексте документа нет NaN, undefined и нераскрытых {{}}');
+
+    console.log('10. Инвестиционный документ: масштабы, дубли, «УТОЧНИТЬ», чувствительность');
+    const N10 = st.params.project.farmsCount;
+    w.MTF.applyDocMode(st, 'investment'); w.MTF.activeTab = 'doc'; w.MTF.render();
+    const prev10 = w.document.querySelector('#main .doc-prev'), heads10 = [...prev10.querySelectorAll('h2')].map(h => h.textContent);
+    ok(!heads10.some(h => /Консолидация|Участники проекта|^\d+\. Обновление/.test(h)), 'нет отдельных разделов «Консолидация», «Участники», «Обновление» (встроены в другие)');
+    ok(![...prev10.querySelectorAll('h3')].some(h => /Стоимость проекта в целом/.test(h.textContent)), 'нет дублирующего блока «Стоимость проекта в целом»');
+    ok(/Обновление основных средств/.test(prev10.textContent) && /Источники финансирования/.test(prev10.textContent) && /Что требуется от инвестора/.test(prev10.textContent), 'обновление ОС, источники финансирования и «Что требуется от инвестора» остались внутри разделов');
+    const marks = prev10.querySelectorAll('mark.todo').length;
+    ok(marks > 0 && /УТОЧНИТЬ/.test(w.document.querySelector('#main .note.warn').textContent) && w.MTF._todoCount === marks, 'места «УТОЧНИТЬ» подсвечены и посчитаны (' + marks + ')');
+    const scopeRe = /(одн[аоуй]+\s+ферм|1 ферм|на проект|проект в целом|\d+ ферм|инвестор)/i;
+    let noScope = [];
+    [...prev10.querySelectorAll('section')].forEach(s => {
+      const h = s.querySelector('h2').textContent.trim(); if (/^Приложение/.test(h)) return;
+      const sectionWide = /на одну типовую ферму/.test(s.textContent);
+      [...s.querySelectorAll('table')].forEach(tb => {
+        const head = tb.querySelector('thead').textContent; let okk = sectionWide || scopeRe.test(head);
+        for (let e = tb.previousElementSibling, i = 0; e && i < 3 && !okk; e = e.previousElementSibling, i++) okk = scopeRe.test(e.textContent);
+        if (!okk) noScope.push(h.slice(0, 25) + ': ' + head.replace(/\s+/g, ' ').slice(0, 40));
+      });
+    });
+    ok(noScope.length === 0, 'у каждой таблицы основных разделов подписан масштаб (1 ферма / проект / инвестор)' + (noScope.length ? ': ' + noScope.join('; ') : ''));
+    const fin = [...prev10.querySelectorAll('section')].find(s => /Финансовая модель/.test(s.querySelector('h2').textContent));
+    const r10 = w.MTF.runModel(st), eb = Math.round(r10.pnl[3].ebitda), ebN = String(Math.round(r10.pnl[3].ebitda * N10));
+    ok(fin.textContent.replace(/\s/g, '').indexOf(ebN) >= 0, 'таблица «проект в целом»: EBITDA ' + (r10.pnl[3].year) + ' = ферма × ' + N10 + ' (' + ebN + ')');
+    const metricsHead = fin.querySelector('table').querySelector('thead').textContent;
+    ok(/1 ферма/.test(metricsHead) && new RegExp(N10 + ' ферм').test(metricsHead), 'метрики: колонки «1 ферма» и «' + N10 + ' ферм»');
+    const riskSec = [...prev10.querySelectorAll('section')].find(s => /Риски/.test(s.querySelector('h2').textContent));
+    const sens = [...riskSec.querySelectorAll('table')].pop(), srows = [...sens.querySelectorAll('tbody tr')];
+    ok(srows.length === 5 && /Базовый/.test(srows[0].textContent), 'чувствительность: 5 сценариев, первый — базовый');
+    ok(srows[0].children[1].textContent.replace(/\s/g, '') === String(Math.round(r10.metrics.npv)), 'базовый сценарий совпадает с NPV расчёта (' + Math.round(r10.metrics.npv) + ')');
+    ok(/−/.test(srows[1].children[2].textContent), 'при падении цены молока NPV падает');
+    const dealTxt = [...prev10.querySelectorAll('section')].find(s => /Структура сделки/.test(s.querySelector('h2').textContent)).textContent;
+    ok(/не входит в стоимость проекта/.test(dealTxt), 'режим подготовки «отдельный вклад»: в сделке написано, что в стоимость не входит');
+    st.params.prepShare.mode = 'in_project'; w.MTF.render();
+    const dealTxt2 = [...w.document.querySelectorAll('#main .doc-prev section')].find(s => /Структура сделки/.test(s.querySelector('h2').textContent)).textContent;
+    ok(/включён в стоимость проекта/.test(dealTxt2) && !/не входит в стоимость проекта/.test(dealTxt2), 'режим «входит в стоимость»: текст сделки меняется');
+    st.params.prepShare.mode = 'separate';
+    w.MTF.applyDocMode(st, 'estimate'); w.MTF.render();
+    ok([...w.document.querySelectorAll('#main .doc-prev h3')].some(h => /Стоимость проекта в целом/.test(h.textContent)), 'в смете блок «Стоимость проекта в целом» остался');
     finish();
   });
 }
