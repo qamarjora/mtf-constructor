@@ -40,11 +40,14 @@ MTF.annualYield = function (P) {
   return P.milkYield; // уже годовой на фуражную
 };
 
-/* Выбраковка коров в году проекта: в первые годы может быть ниже,
-   чем в установившемся режиме (стадо молодое, почти все коровы — первотёлки). */
+/* Выбраковка коров в году проекта (yearIdx с нуля), три фазы:
+   первые cullRateFreeYears лет — 0%, затем cullRateStartYears лет — cullRateStart,
+   далее установившаяся cullRate (стадо молодое, почти все коровы — первотёлки). */
 MTF.cullRateAt = function (P, yearIdx) {
+  const free = P.cullRateFreeYears || 0;
+  if (yearIdx < free) return 0;
   const n = P.cullRateStartYears || 0;
-  if (n > 0 && yearIdx < n && P.cullRateStart !== undefined && P.cullRateStart !== null) {
+  if (n > 0 && yearIdx < free + n && P.cullRateStart !== undefined && P.cullRateStart !== null) {
     return P.cullRateStart;
   }
   return P.cullRate;

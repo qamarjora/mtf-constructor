@@ -34,15 +34,19 @@ ok(R0.herd.meta.target === targetExpected, 'мощность = min(коровн�
 console.log('2. Выбраковка по годам (cullRateAt)');
 const pr = c(P.production);
 pr.cullRate = 26; pr.cullRateStart = 10;
-pr.cullRateStartYears = 0;
+pr.cullRateFreeYears = 0; pr.cullRateStartYears = 0;
 ok(M.cullRateAt(pr, 0) === 26 && M.cullRateAt(pr, 5) === 26, 'по умолчанию (0 лет) — везде 26%');
 pr.cullRateStartYears = 2;
 ok(M.cullRateAt(pr, 0) === 10 && M.cullRateAt(pr, 1) === 10 && M.cullRateAt(pr, 2) === 26, '2 года по 10%, затем 26%');
 ok(P.production.cullRate === 26, 'значение по умолчанию cullRate = 26 (было 10)');
-ok(!P.production.cullRateStartYears, 'режим по годам выключен по умолчанию');
-const s2 = fresh(); s2.params.production.cullRateStartYears = 2;
-const R2 = M.runModel(s2);
-ok(R2.herd[1].cows > R0.herd[1].cows, 'пониженная выбраковка поднимает поголовье 2-го года (' + Math.round(R0.herd[1].cows) + ' → ' + Math.round(R2.herd[1].cows) + ')');
+ok(P.production.cullRateFreeYears === 1 && P.production.cullRateStartYears === 2, 'по умолчанию: 1 год без выбраковки, затем 2 года по 10%');
+const dp = c(P.production);
+ok([0, 1, 2, 3, 4].map(i => M.cullRateAt(dp, i)).join() === '0,10,10,26,26', 'по умолчанию по годам 0..4: 0, 10, 10, 26, 26');
+const s0 = fresh(); s0.params.production.cullRateFreeYears = 0; s0.params.production.cullRateStartYears = 0;
+const R00 = M.runModel(s0);
+const R2 = M.runModel(fresh());
+ok(finite(R2.herd) && isFinite(R2.metrics.npv), 'трёхфазная выбраковка считается без NaN, NPV = ' + Math.round(R2.metrics.npv / 1000) + ' млн');
+ok(R2.herd[1].cows > R00.herd[1].cows, 'пониженная выбраковка поднимает поголовье 2-го года (' + Math.round(R00.herd[1].cows) + ' → ' + Math.round(R2.herd[1].cows) + ')');
 
 console.log('3. График продажи тёлок (salePlanOf)');
 const sp = M.salePlanOf({ calfSaleAgeMo: 2, salePlan: [{ age: 2, share: 50, price: 0 }, { age: 12, share: 25, price: 400 }, { age: 40, share: 25, price: 500 }] });

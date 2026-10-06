@@ -265,8 +265,9 @@ MTF.renderInputs = function (res) {
     MTF.fmt.pct(meta.penShare * 100, 0) + '</b>.</div>' +
     field('Выход телят на 100 коров', 'production.calvingRate', 'гол') +
     field('Выбраковка, установившаяся', 'production.cullRate', '%/год') +
-    field('Выбраковка в первые годы', 'production.cullRateStart', '%/год') +
-    field('Сколько лет пониженная (0 — нет)', 'production.cullRateStartYears', 'лет') +
+    field('Лет без выбраковки (0 — нет)', 'production.cullRateFreeYears', 'лет') +
+    field('Выбраковка в пониженный период', 'production.cullRateStart', '%/год') +
+    field('Сколько лет пониженная, после безвыбраковочного периода (0 — нет)', 'production.cullRateStartYears', 'лет') +
     field('Падёж телят', 'production.calfMortality', '%') +
     field('Падёж молодняка', 'production.heiferMortality', '%') +
     field('Дней сухостоя', 'production.dryDays', 'дн') +

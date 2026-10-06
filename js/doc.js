@@ -679,9 +679,12 @@ MTF.docHtml = function (state, secs) {
 /* Строки таблицы продуктивности: выбраковка по годам и схема продажи лишних тёлок */
 MTF.docCullRows = function (p, f) {
   const P = p.production;
-  const rows = [['Выбраковка, % в год', P.cullRateStartYears > 0
-    ? f.num(P.cullRateStart) + '% в первые ' + f.num(P.cullRateStartYears) + ' г., затем ' + f.num(P.cullRate) + '%'
-    : f.num(P.cullRate)]];
+  const free = P.cullRateFreeYears || 0, low = P.cullRateStartYears || 0;
+  const parts = [];
+  if (free > 0) parts.push('0% в ' + (free === 1 ? '1-й год' : 'первые ' + f.num(free) + ' г.'));
+  if (low > 0) parts.push(f.num(P.cullRateStart) + '% в ' + (free > 0 ? 'следующие ' : 'первые ') + f.num(low) + ' г.');
+  parts.push((parts.length ? 'затем ' : '') + f.num(P.cullRate) + '%');
+  const rows = [['Выбраковка, % в год', parts.length > 1 ? parts.join(', ') : f.num(P.cullRate)]];
   if (P.remontMode === 'own' && MTF.salePlanOf) {
     rows.push(['Продажа лишних тёлок', MTF.salePlanOf(P).map(function (t) {
       return f.num(t.frac * 100, 0) + '% в ' + f.num(t.age) + ' мес.';
