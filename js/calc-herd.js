@@ -1,22 +1,10 @@
 /* ============================================================
-   ДВИЖЕНИЕ СТАДА — помесячная модель  v1.1
+   ДВИЖЕНИЕ СТАДА — помесячная модель
    Гибкое размещение молодняка, режимы задания удоя,
    докуп поголовья по годам.
    ============================================================ */
 
 window.MTF = window.MTF || {};
-
-/* График продажи сверхремонтных тёлок: пресет или свой.
-   Возвращает массив ступеней {age, share, price}. */
-MTF.salePlan = function (P) {
-  const mode = P.salePlanMode || 'late';
-  if (mode !== 'custom' && MTF.salePlanPresets && MTF.salePlanPresets[mode]
-      && MTF.salePlanPresets[mode].plan) {
-    return MTF.salePlanPresets[mode].plan;
-  }
-  return (P.salePlan && P.salePlan.length) ? P.salePlan
-    : [{ age: 12, share: 100, price: 400 }];
-};
 
 /* Межотёльный период в днях */
 MTF.calvingInterval = function (P) {
@@ -103,7 +91,7 @@ MTF.calcHerd = function (p) {
       milkLiters: 0, calvings: 0, calvesBorn: 0,
       calvesSoldM: 0, calvesSoldF: 0, cullSold: 0,
       bullsSold: 0, bullWeightKg: 0,
-      heifersPurchased: 0, surplusSold: 0, heifersCulled: 0, heiferSales: {},
+      heifersPurchased: 0, surplusSold: 0,
       warnings: []
     };
   }
@@ -161,44 +149,13 @@ MTF.calcHerd = function (p) {
 
     const saleAge = Math.max(1, P.calfSaleAgeMo);
 
-    /* ---------- Отбор сверхремонтных тёлок ----------
-       Избыток распределяется по графику продажи: несколько ступеней
-       с разным возрастом, долей и ценой. Доли применяются к тому,
-       что родилось, а не к остатку, поэтому на каждой ступени
-       отбирается своя часть приплода.
-
-       Пока стадо не вышло на проектную мощность, оставляются все
-       тёлочки — продавать нечего. */
-    const keepRatio = (P.heiferKeepRatio || 130) / 100;
-    /* Стадо считается вышедшим на мощность с допуском в полторы месячные
-       выбраковки: поголовье колеблется вокруг цели, и жёсткий порог
-       почти всегда оказывался чуть выше текущего значения. */
-    const monthlyCull = cows * (P.cullRate / 100) / 12;
-    const atCapacity = cows >= target - monthlyCull * 1.5;
-    const keepPerMonth = monthlyCull * keepRatio;
-
     if (P.remontMode === 'own') {
-      const plan = MTF.salePlan(P);
-      /* Месячный избыток считается один раз от приплода тёлочек:
-         родилось минус то, что нужно оставить на ремонт. Доли ступеней
-         применяются к этому избытку, а не к остатку на каждом возрасте —
-         иначе поздние ступени оставались бы без поголовья. */
-      const monthSurplus = atCapacity ? Math.max(0, females - keepPerMonth) : 0;
-
-      plan.forEach(step => {
-        const a = Math.max(saleAge, Math.min(29, step.age));
-        const avail = heifers[a];
-        if (avail <= 0) return;
-
-        const quota = monthSurplus * step.share / 100;
-        const sold = Math.min(quota, avail);
-        if (sold <= 0) return;
-
-        heifers[a] = avail - sold;
-        if (a <= saleAge) acc.calvesSoldF += sold;
-        else acc.heifersCulled += sold;
-        acc.heiferSales[a] = (acc.heiferSales[a] || 0) + sold;
-      });
+      const avail = heifers[saleAge];
+      const keep = cows < target * 0.98
+        ? avail
+        : Math.min(avail, cows * (P.cullRate / 100) / 12 * 1.3);
+      heifers[saleAge] = keep;
+      acc.calvesSoldF += Math.max(0, avail - keep);
     } else {
       acc.calvesSoldF += heifers[saleAge];
       heifers[saleAge] = 0;
@@ -274,8 +231,6 @@ MTF.calcHerd = function (p) {
         milkPerCow: cows > 0 ? acc.milkLiters / cows : 0,
         calvesSold: acc.calvesSoldM + acc.calvesSoldF,
         surplusSold: acc.surplusSold,
-        heifersCulled: acc.heifersCulled,
-        heiferSales: acc.heiferSales,
         cullSold: acc.cullSold,
         bullsSold: acc.bullsSold,
         bullWeightKg: acc.bullWeightKg,

@@ -1,11 +1,11 @@
 /* ============================================================
-   КОНФИГУРАЦИЯ ПРОЕКТА  v1.1
+   КОНФИГУРАЦИЯ ПРОЕКТА
    Здесь меняются справочники и значения по умолчанию.
    ============================================================ */
 
 window.MTF = window.MTF || {};
 
-MTF.VERSION = '1.1.0';
+MTF.VERSION = '1.2.0';
 
 /* ---------- Валюты ----------
    base — валюта расчёта. Все суммы приводятся к ней.
@@ -30,7 +30,7 @@ MTF.defaults = {
     baseCurrency: 'KZT',
     displayCurrency: 'EUR',   // валюта сводного итога
     groupCurrency: {          // валюта отображения по группам капзатрат
-      prep: 'KZT', build: 'KZT', equip: 'EUR', herd: 'EUR'
+      build: 'KZT', equip: 'EUR', herd: 'EUR'
     },
     rateEUR: 520,
     rateUSD: 480,
@@ -78,11 +78,6 @@ MTF.defaults = {
     remontMode: 'own',
     bullMode: 'sell_calf',
     calfSaleAgeMo: 2,
-    heiferKeepRatio: 130,      // оставлять на ремонт, % к годовой потребности
-    salePlanMode: 'late',      // early | late | steps | custom
-    salePlan: [                // график продажи сверхремонтных тёлок
-      { age: 12, share: 100, price: 400 }
-    ],
     fattenAgeMo: 16,
     fattenWeightKg: 450
   },
@@ -98,7 +93,7 @@ MTF.defaults = {
     dmPriceYoung: 60,
     landMode: 'perHead',     // fixed | perHead
     landHa: 1000,
-    landHaPerCow: 2.1,
+    landHaPerCow: 1.5,
     landCostPerHa: 220000,
     lumpAnnual: 0            // фиксированная сумма в год, тыс. ₸
   },
@@ -146,10 +141,6 @@ MTF.defaults = {
 ------------------------------------------------ */
 MTF.capexItems = [
   /* --- Подготовительный этап --- */
-  { id: 'p_land',  name: 'Земельный участок',                group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
-  { id: 'p_psd',   name: 'Проектирование (ПСД)',             group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
-  { id: 'p_exp',   name: 'Вневедомственная экспертиза',      group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
-  { id: 'p_geo',   name: 'Геология и топосъёмка',            group: 'prep', unit: 'sum', value: 0, cur: 'KZT' },
 
   /* --- Строительство --- */
   { id: 'b_all',   name: 'Строительство зданий и инфраструктура', group: 'build', unit: 'sum', value: 200000, cur: 'KZT' },
@@ -267,37 +258,4 @@ MTF.groupCur = function (p, g) {
 };
 MTF.groupSign = function (p, g) {
   return (MTF.currencies[MTF.groupCur(p, g)] || MTF.currencies.KZT).sign;
-};
-
-
-/* ---------- Готовые графики продажи сверхремонтных тёлок ----------
-   age   — возраст продажи, месяцев
-   share — доля избытка, %
-   price — цена за голову, тыс. ₸
------------------------------------------------- */
-MTF.salePlanPresets = {
-  early: {
-    name: 'Ранняя продажа — всё телятами',
-    hint: 'Минимум мест под молодняк, минимум выручки. Корма не тратятся.',
-    plan: [{ age: 2, share: 100, price: 95 }]
-  },
-  late: {
-    name: 'Поздняя продажа — всё в год',
-    hint: 'Максимум выручки, но молодняк занимает места два года подряд.',
-    plan: [{ age: 12, share: 100, price: 400 }]
-  },
-  steps: {
-    name: 'Три ступени — 2, 6 и 12 месяцев',
-    hint: 'Компромисс: часть уходит рано и разгружает помещения, часть доращивается.',
-    plan: [
-      { age: 2, share: 34, price: 95 },
-      { age: 6, share: 33, price: 220 },
-      { age: 12, share: 33, price: 400 }
-    ]
-  },
-  custom: {
-    name: 'Свой график',
-    hint: 'Возраст, доля и цена задаются вручную. Строки добавляются и удаляются.',
-    plan: null
-  }
 };
