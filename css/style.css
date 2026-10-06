@@ -413,3 +413,7 @@ th button.del{font-size:13px;margin-left:4px;vertical-align:middle}
 .doc-prev table.dt td.n{font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:11.5px}
 .doc-prev table.dt tbody tr:nth-child(even){background:var(--surface-2)}
 .doc-prev table.dt tbody tr:hover{background:var(--accent-l)}
+
+/* Места, которые нужно уточнить в тексте документа */
+.doc-prev mark.todo{background:#fff1a8;color:inherit;padding:0 3px;border-radius:3px}
+.doc-prev p i{color:var(--ink-2)}
