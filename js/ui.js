@@ -997,6 +997,17 @@ MTF.addSubsidy = function () {
   MTF.save(); MTF.render();
 };
 
+/* Переносит в state все ключи сохранённого проекта, которых нет в основном списке:
+   данные модулей (machinery, prepCosts, prepTeam, powerItems, waterItems, participants,
+   fundingExtra, structureTexts, renewal*). Недостающее потом дополняют ensure* модулей. */
+MTF.coreStateKeys = ['params', 'capexItems', 'staff', 'opexItems', 'subsidies', 'docSections', 'docMode', 'version', 'scenarios'];
+MTF.carryExtras = function (st, src) {
+  Object.keys(src || {}).forEach(function (k) {
+    if (MTF.coreStateKeys.indexOf(k) < 0 && src[k] !== undefined && src[k] !== null) st[k] = src[k];
+  });
+  return st;
+};
+
 MTF.save = function () { try { sessionStorage.setItem('mtf', JSON.stringify(MTF.state)); } catch (e) { } };
 MTF.load = function () {
   try {
@@ -1009,7 +1020,7 @@ MTF.load = function () {
     Object.keys(base.params).forEach(k => {
       base.params[k] = Object.assign({}, base.params[k], o.params[k] || {});
     });
-    return {
+    const st = {
       params: base.params,
       capexItems: Array.isArray(o.capexItems) && o.capexItems.length ? o.capexItems : base.capexItems,
       staff: Array.isArray(o.staff) ? o.staff : base.staff,
@@ -1019,6 +1030,8 @@ MTF.load = function () {
       docMode: o.docMode || 'estimate',
       version: MTF.VERSION
     };
+    MTF.carryExtras(st, o);   // данные модулей (парк, подготовка, энергетика, структура, обновление)
+    return st;
   } catch (e) { return null; }
 };
 

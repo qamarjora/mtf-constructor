@@ -59,6 +59,20 @@ MTF.prepShare = {
   investorsCount: 0   // количество инвесторов; 0 = считать автоматически
 };
 
+/* Как подготовительный этап учитывается в проекте (params.prepShare.mode).
+   separate   — отдельный вклад инициаторов: в стоимость проекта и в расчёт не входит (по умолчанию);
+   in_project — входит в стоимость проекта, ложится на собственные средства, кредитом не покрывается;
+   in_share   — зарезервирован под решение по долям; пока считается как separate. */
+MTF.prepModes = [
+  { id: 'separate', name: 'Отдельный вклад инициаторов (не входит в стоимость проекта)' },
+  { id: 'in_project', name: 'Входит в стоимость проекта (собственные средства)' },
+  { id: 'in_share', name: 'Входит и засчитывается в долю инициаторов (после решения по долям)', disabled: true }
+];
+MTF.prepModeOf = function (p) {
+  const m = p && p.prepShare && p.prepShare.mode;
+  return m === 'in_project' ? 'in_project' : 'separate';
+};
+
 /* ---------- Расчёт ---------- */
 MTF.calcPrep = function (p, costs, team) {
   const N = p.project.farmsCount || 1;
@@ -102,9 +116,45 @@ MTF.calcPrep = function (p, costs, team) {
     operatorSum: grand * opShare,
     investorsSum: grand * invShare,
     perInvestor: grand * invShare / investors,
-    perFarm: grand / N
+    perFarm: grand / N,
+    grandK: grand / 1000,          // тыс. ₸ на проект
+    perFarmK: grand / N / 1000     // тыс. ₸ на одну ферму
   };
 };
+
+/* ---------- Режим «входит в стоимость проекта» ----------
+   Сумма подготовки на ферму (проект ÷ число ферм) добавляется в капзатраты
+   группой prep и заменяет статьи этой группы из таблицы капзатрат.
+   Кредит считается только от строительства, оборудования и стада, поэтому
+   подготовка ложится на собственные средства. Режим «отдельный вклад»
+   расчёт не меняет. */
+(function () {
+  if (!MTF.calcCapex || !MTF.runModel) return;
+
+  const origRun = MTF.runModel;
+  MTF.runModel = function (state) {
+    const prev = MTF._runState;
+    MTF._runState = state;
+    try { return origRun.apply(this, arguments); } finally { MTF._runState = prev; }
+  };
+
+  const origCapex = MTF.calcCapex;
+  MTF.calcCapex = function (p) {
+    const c = origCapex.apply(this, arguments);
+    if (MTF.prepModeOf(p) !== 'in_project') return c;
+    if (p.project && p.project.type === 'feedlot') return c;
+    const st = MTF._runState || MTF.state || {};
+    const pr = MTF.calcPrep(p, st.prepCosts, st.prepTeam);
+    const k = pr.perFarmK;
+    c.groups.prep = k;
+    c.rows = c.rows.filter(r => r.group !== 'prep').concat([{
+      id: 'prep_total', name: 'Подготовительный этап (доля фермы)', group: 'prep',
+      sum: k, cur: 'KZT', native: k, unit: 'sum' }]);
+    c.prepIncluded = k;
+    c.total += k;
+    return c;
+  };
+})();
 
 /* ---------- Раздел документа ---------- */
 (function () {
@@ -128,7 +178,7 @@ MTF.calcPrep = function (p, costs, team) {
 
 {{prepShareTable}}
 
-Указанные расходы не входят в стоимость строительства фермы и не финансируются за счёт заёмных средств. Суммы приведены на проект в целом и подлежат уточнению по мере заключения договоров.`
+{{prepModeNote}}`
   };
 
   const di = MTF.docSections.findIndex(s => s.id === 'disclaimer');
@@ -159,28 +209,39 @@ MTF.calcPrep = function (p, costs, team) {
       r.map((c, i) => '<td' + (i > 0 ? ' class="r n"' : '') + '>' + c + '</td>').join('') +
       '</tr>').join('') + '</tbody></table>';
 
-    t.prepCostTable = tbl(['Статья', 'Сумма, ₸'],
-      P.costRows.map(r => [r.name, f.num(r.total)])
-        .concat([['<b>Итого</b>', '<b>' + f.num(P.costTotal) + '</b>']]));
+    const N = P.farms, K = v => f.num(v / 1000);          // ₸ → тыс. ₸
+    const hF = '1 ферма, тыс. ₸', hN = N + ' ферм, тыс. ₸';
 
-    t.prepTeamTable = tbl(['Позиция', 'В месяц, ₸', 'Месяцев', 'Итого, ₸'],
-      P.teamRows.map(r => [r.name, f.num(r.gross), f.num(r.months), f.num(r.total)])
+    t.prepCostTable = tbl(['Статья', hF, hN],
+      P.costRows.map(r => [r.name, K(r.total / N), K(r.total)])
+        .concat([['<b>Итого</b>', '<b>' + K(P.costTotal / N) + '</b>', '<b>' + K(P.costTotal) + '</b>']]));
+
+    t.prepTeamTable = tbl(['Позиция', 'В месяц, ₸', 'Месяцев', hF, hN],
+      P.teamRows.map(r => [r.name, f.num(r.gross), f.num(r.months), K(r.total / N), K(r.total)])
         .concat([
-          ['Резерв ' + MTF.prepReserve + '%', '', '', f.num(P.teamReserve)],
-          ['<b>Итого</b>', '', '', '<b>' + f.num(P.teamTotal) + '</b>']
+          ['Резерв ' + MTF.prepReserve + '%', '', '', K(P.teamReserve / N), K(P.teamReserve)],
+          ['<b>Итого</b>', '', '', '<b>' + K(P.teamTotal / N) + '</b>', '<b>' + K(P.teamTotal) + '</b>']
         ]));
 
     const sh = (p.prepShare || MTF.prepShare);
-    t.prepShareTable = tbl(['Показатель', 'Значение'], [
-      ['Расходы до финансирования, ₸', f.num(P.costTotal)],
-      ['Проектная команда, ₸', f.num(P.teamTotal)],
-      ['<b>Всего подготовительный этап, ₸</b>', '<b>' + f.num(P.grand) + '</b>'],
-      ['Доля Оператора (' + f.num(sh.operator) + '%), ₸', f.num(P.operatorSum)],
-      ['Доля инвесторов (' + f.num(sh.investors) + '%), ₸', f.num(P.investorsSum)],
-      ['Количество инвесторов', f.num(P.investorsCount)],
-      ['<b>На одного инвестора, ₸</b>', '<b>' + f.num(P.perInvestor) + '</b>'],
-      ['В расчёте на одну ферму, ₸', f.num(P.perFarm)]
+    t.prepShareTable = tbl(['Показатель', hF, hN], [
+      ['Расходы до финансирования', K(P.costTotal / N), K(P.costTotal)],
+      ['Проектная команда', K(P.teamTotal / N), K(P.teamTotal)],
+      ['<b>Всего подготовительный этап</b>', '<b>' + K(P.grand / N) + '</b>', '<b>' + K(P.grand) + '</b>'],
+      ['Доля Оператора (' + f.num(sh.operator) + '%)', K(P.operatorSum / N), K(P.operatorSum)],
+      ['Доля инвесторов (' + f.num(sh.investors) + '%)', K(P.investorsSum / N), K(P.investorsSum)],
+      ['<b>На одного инвестора</b> (инвесторов: ' + f.num(P.investorsCount) + ')', '', '<b>' + K(P.perInvestor) + '</b>']
     ]);
+
+    t.prepModeNote = MTF.prepModeOf(p) === 'in_project'
+      ? 'Подготовительный этап **включён в стоимость проекта** и учтён в собственном участии: ' +
+        f.num(P.perFarmK) + ' тыс. ₸ на одну ферму, ' + f.num(P.grandK) + ' тыс. ₸ на ' + N +
+        ' ферм. Заёмными средствами он не финансируется, инвестиционная субсидия на эти затраты не начисляется. ' +
+        'Суммы подлежат уточнению по мере заключения договоров.'
+      : 'Подготовительный этап **не входит в стоимость проекта** и не учитывается в расчёте NPV, IRR и DSCR. ' +
+        'Это отдельный вклад инициаторов до получения финансирования, он не покрывается заёмными средствами. ' +
+        'Суммы приведены в тыс. ₸: на ' + N + ' ферм (проект в целом) и на одну ферму (проект ÷ ' + N + '). ' +
+        'Суммы подлежат уточнению по мере заключения договоров.';
 
     return t;
   };
@@ -203,6 +264,7 @@ MTF.calcPrep = function (p, costs, team) {
     if (state.params.prepShare.investorsCount === undefined) {
       state.params.prepShare.investorsCount = 0;
     }
+    if (!state.params.prepShare.mode) state.params.prepShare.mode = 'separate';
     return state;
   };
 
@@ -235,9 +297,14 @@ MTF.calcPrep = function (p, costs, team) {
       '<td class="n">' + f.num(C.teamRows[i].total) + '</td>' +
       '<td><button class="del" data-ptdel="' + i + '">×</button></td></tr>').join('');
 
+    const mode = MTF.prepModeOf(P);
     return '<div class="card" style="margin-top:14px"><h3>Подготовительный этап</h3>' +
-      '<div class="note ok">Всего <b>' + f.num(C.grand) + ' ₸</b> на проект. ' +
-      'На одного инвестора <b>' + f.num(C.perInvestor) + ' ₸</b>.</div>' +
+      '<div class="f wide"><label>Как учитывать в проекте</label><select data-pmode>' +
+      MTF.prepModes.map(m => '<option value="' + m.id + '"' + (m.id === mode ? ' selected' : '') +
+        (m.disabled ? ' disabled' : '') + '>' + m.name + '</option>').join('') + '</select></div>' +
+      '<div class="note ok">Всего <b>' + f.num(C.grand) + ' ₸</b> на проект (' + f.num(C.perFarmK) +
+      ' тыс. ₸ на ферму). На одного инвестора <b>' + f.num(C.perInvestor) + ' ₸</b>. ' +
+      (mode === 'in_project' ? 'Входит в стоимость проекта.' : 'В стоимость проекта не входит.') + '</div>' +
 
       '<h4>Расходы до получения финансирования</h4>' +
       '<div class="tw"><table><thead><tr><th>Статья</th><th>Сумма, ₸</th>' +
@@ -299,6 +366,7 @@ MTF.calcPrep = function (p, costs, team) {
     on('[data-ptn]', el => S.prepTeam[el.dataset.ptn].name = el.value);
     on('[data-pts]', el => S.prepTeam[el.dataset.pts].salary = parseFloat(el.value) || 0);
     on('[data-ptm]', el => S.prepTeam[el.dataset.ptm].months = parseFloat(el.value) || 0);
+    on('[data-pmode]', el => { S.params.prepShare.mode = el.value; });
     on('[data-psh]', el => {
       const k = el.dataset.psh, v = parseFloat(el.value) || 0;
       /* Инвесторы — люди, дробного количества не бывает. Отрицательное

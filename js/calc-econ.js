@@ -216,7 +216,7 @@ MTF.calcSubsidies = function (p, herdYears, capex, subsidies) {
         } else v = y.cows * s.value;
       } else if (s.type === 'capex_pct') {
         const span = s.yearTo - s.yearFrom + 1;
-        const base = s.base === 'all' ? capex.total : (capex.groups[s.base] || 0);
+        const base = s.base === 'all' ? capex.total - (capex.prepIncluded || 0) : (capex.groups[s.base] || 0);
         v = base * s.value / 100 / span;
       } else if (s.type === 'fixed_year') v = s.value;
       if (v > 0) detail[s.name] = v;

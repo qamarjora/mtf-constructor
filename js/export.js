@@ -164,8 +164,10 @@ MTF.export.loadJson = function () {
           prepCosts: Array.isArray(s.prepCosts) && s.prepCosts.length ? s.prepCosts : base.prepCosts,
           prepTeam: Array.isArray(s.prepTeam) && s.prepTeam.length ? s.prepTeam : base.prepTeam,
           docSections: MTF.mergeDocSections(s.docSections),
+          docMode: s.docMode || 'custom',
           version: MTF.VERSION
         };
+        MTF.carryExtras(MTF.state, s);
         Object.keys(base.params).forEach(k => {
           MTF.state.params[k] = Object.assign({}, base.params[k], (s.params || {})[k] || {});
         });
