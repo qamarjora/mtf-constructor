@@ -58,13 +58,14 @@ ok(M.salePlanOf({ calfSaleAgeMo: 2, salePlan: [{ age: 6, share: 0, price: 1 }] }
 
 console.log('4. Цена сверхремонтной нетели (herd.surplusHeiferPct)');
 ok(P.herd.surplusHeiferPct === 85, 'по умолчанию 85%');
-const sa = fresh(), sb = fresh(); sa.params.herd.surplusHeiferPct = 85; sb.params.herd.surplusHeiferPct = 60;
+const sa = fresh(), sb = fresh(); sa.params.prices.revenueScope = sb.params.prices.revenueScope = 'all'; sa.params.herd.surplusHeiferPct = 85; sb.params.herd.surplusHeiferPct = 60;
 const ra = M.runModel(sa), rb = M.runModel(sb);
 const iy = ra.pnl.findIndex(y => y.revDetail && y.revDetail['Сверхремонтные нетели'] > 0);
 if (iy < 0) console.log('  – в сценарии по умолчанию сверхремонтных нетелей нет, проверка пропущена');
 else ok(near(rb.pnl[iy].revDetail['Сверхремонтные нетели'] / ra.pnl[iy].revDetail['Сверхремонтные нетели'], 60 / 85, 1e-9), 'выручка с нетелей пропорциональна 60/85 (год ' + (iy + 1) + ')');
-const sc = fresh(); delete sc.params.herd.surplusHeiferPct;
-ok(near(M.runModel(sc).metrics.npv, R0.metrics.npv, 1e-6), 'старый проект без поля считается как 85%');
+const sc = fresh(); delete sc.params.herd.surplusHeiferPct; sc.params.prices.revenueScope = 'all';
+const sc0 = fresh(); sc0.params.prices.revenueScope = 'all';
+ok(near(M.runModel(sc).metrics.npv, M.runModel(sc0).metrics.npv, 1e-6), 'старый проект без поля считается как 85%');
 
 console.log('5. ФОТ тремя блоками (calcPayroll)');
 const sf = fresh();
@@ -112,6 +113,19 @@ const pd = fresh(); pd.params.prepShare = Object.assign({}, M.prepShare, { mode:
 pd.subsidies.forEach(s => { if (s.type === 'capex_pct') s.base = 'all'; });
 const pe = fresh(); pe.subsidies.forEach(s => { if (s.type === 'capex_pct') s.base = 'all'; });
 ok(near(M.runModel(pd).pnl[1].subsidy, M.runModel(pe).pnl[1].subsidy, 1e-6), 'субсидия с базой «все затраты» не начисляется на подготовку');
+
+console.log('6б. Состав выручки (prices.revenueScope)');
+ok(P.prices.revenueScope === 'milk', 'по умолчанию в выручку входит только молоко');
+const rm = M.runModel(fresh());
+ok(rm.pnl.every(y => Object.keys(y.revDetail).length === 1 && y.revDetail['Молоко'] !== undefined), 'при «только молоко» в выручке одна статья — молоко');
+ok(rm.pnl.every((y, i) => near(y.revenue, rm.herd[i].milkLiters * P.prices.milk * Math.pow(1 + P.prices.priceInflation / 100, i) / 1000, 1e-6)), 'выручка = литры × цена × рост цен ÷ 1000');
+const sAll = fresh(); sAll.params.prices.revenueScope = 'all'; const rAll = M.runModel(sAll);
+ok(rAll.pnl.every((y, i) => y.revenue >= rm.pnl[i].revenue - 1e-6) && rAll.pnl.some((y, i) => y.revenue > rm.pnl[i].revenue + 1), 'при «все статьи» выручка не меньше и в некоторых годах больше');
+ok(rAll.pnl.some(y => Object.keys(y.revDetail).length > 1), 'при «все статьи» появляются телята, выбраковка и другие статьи');
+const sUndef = fresh(); delete sUndef.params.prices.revenueScope;
+ok(near(M.runModel(sUndef).metrics.npv, rAll.metrics.npv, 1e-6), 'проект без поля в расчёте = «все статьи» (как считалось раньше)');
+ok(rm.metrics.npv < rAll.metrics.npv, 'только молоко: NPV ниже (' + Math.round(rm.metrics.npv / 1000) + ' против ' + Math.round(rAll.metrics.npv / 1000) + ' млн)');
+ok(rm.pnl.every((y, i) => y.operatorFee <= rAll.pnl[i].operatorFee + 1e-6), 'вознаграждение Оператора от выручки не растёт при «только молоко»');
 
 console.log('7. Порядок скриптов в index.html');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
@@ -224,6 +238,24 @@ else {
     st.params.prepShare.mode = 'separate';
     w.MTF.applyDocMode(st, 'estimate'); w.MTF.render();
     ok([...w.document.querySelectorAll('#main .doc-prev h3')].some(h => /Стоимость проекта в целом/.test(h.textContent)), 'в смете блок «Стоимость проекта в целом» остался');
+
+    console.log('11. Состав выручки: интерфейс, старые проекты, документ');
+    const oldProj = JSON.parse(JSON.stringify(out)); delete oldProj.params.prices.revenueScope;
+    w.sessionStorage.setItem('mtf', JSON.stringify(oldProj));
+    ok(w.MTF.load().params.prices.revenueScope === 'all', 'проект, сохранённый без выбора (F5), открывается с полной выручкой');
+    const newProj = JSON.parse(JSON.stringify(out)); newProj.params.prices.revenueScope = 'milk';
+    w.sessionStorage.setItem('mtf', JSON.stringify(newProj));
+    ok(w.MTF.load().params.prices.revenueScope === 'milk', 'выбор «только молоко» сохраняется');
+    const st11 = w.MTF.initState(); w.MTF.state = st11; w.MTF.activeTab = 'inputs'; w.MTF.render();
+    const selR = w.document.querySelector('[data-p="prices.revenueScope"]');
+    ok(!!selR && selR.value === 'milk', 'на вкладке «Вводные» есть переключатель, выбрано «Только молоко»');
+    selR.value = 'all'; selR.dispatchEvent(new w.Event('change', { bubbles: true }));
+    ok(st11.params.prices.revenueScope === 'all' || w.MTF.state.params.prices.revenueScope === 'all', 'переключатель меняет состав выручки');
+    w.MTF.state.params.prices.revenueScope = 'milk'; w.MTF.applyDocMode(w.MTF.state, 'investment'); w.MTF.activeTab = 'doc'; w.MTF.render();
+    const dm = w.document.querySelector('#main .doc-prev').textContent;
+    ok(/только от реализации молока/.test(dm) && !/Дополнительные источники выручки/.test(dm), 'документ: «выручка только от молока»');
+    w.MTF.state.params.prices.revenueScope = 'all'; w.MTF.render();
+    ok(/Дополнительные источники выручки/.test(w.document.querySelector('#main .doc-prev').textContent), 'документ при «все статьи» говорит про дополнительные источники');
     finish();
   });
 }
