@@ -121,7 +121,8 @@ ok(order.length === new Set(order).size, 'нет повторных подклю
 ok(at('config.js') === 0, 'config.js первым');
 ok(at('feedlot-switch.js') > at('calc-fin.js') && at('feedlot-switch.js') < at('doc.js') && at('feedlot-switch.js') < at('ui.js'), 'feedlot-switch.js: после calc-fin, до doc и ui');
 ['machinery.js', 'prep.js', 'utilities.js', 'structure.js', 'renewal.js'].forEach(n => ok(at(n) > at('ui.js'), n + ' после ui.js'));
-ok(at('feedlot-ui.js') > Math.max(...['machinery.js', 'prep.js', 'utilities.js', 'structure.js', 'renewal.js'].map(at)), 'feedlot-ui.js после всех модулей');
+ok(at('doc-layout.js') > Math.max(...['machinery.js', 'prep.js', 'utilities.js', 'structure.js', 'renewal.js'].map(at)), 'doc-layout.js после всех модулей, добавляющих разделы');
+ok(at('feedlot-ui.js') > at('doc-layout.js'), 'feedlot-ui.js после doc-layout.js');
 ok(at('feedlot-doc.js') === order.length - 1, 'feedlot-doc.js последним');
 const onDisk = fs.readdirSync(dir).filter(f => f.endsWith('.js'));
 ok(onDisk.every(f => order.indexOf(f) >= 0), 'каждый файл из js/ подключён в index.html' + (onDisk.filter(f => order.indexOf(f) < 0).length ? ': нет ' + onDisk.filter(f => order.indexOf(f) < 0) : ''));
@@ -149,6 +150,40 @@ else {
     const S = w.MTF.state;
     ok(S.docMode === 'passport' && S.powerItems[0].name === 'ТЕСТ' && S.participants[0].role === 'ТЕСТ' && S.renewalEnabled === false &&
       S.structureTexts.intro === 'ТЕСТ' && S.renewalCycles[0].name === 'ТЕСТ' && S.fundingExtra.length === 1, '«Открыть проект» сохраняет данные всех модулей');
+
+    console.log('9. Порядок, нумерация и приложения документа (doc-layout.js)');
+    const LS = 'АБВГДЕ';
+    const st = w.MTF.initState(); w.MTF.state = st;
+    const heads = id => { w.MTF.applyDocMode(st, id); w.MTF.activeTab = 'doc'; w.MTF.render();
+      return [...w.document.querySelectorAll('#main .doc-prev section')]; };
+    const hh = secs => secs.map(s => s.querySelector('h2').textContent.trim());
+    w.MTF.docModes.filter(m => m.sections).forEach(m => {
+      const hs = hh(heads(m.id)), nums = hs.map(h => (h.match(/^(\d+)\./) || [])[1]).filter(Boolean).map(Number);
+      ok(nums.every((n, i) => n === i + 1), m.id + ': основные разделы нумеруются подряд 1…' + nums.length);
+      const apps = hs.filter(h => /^Приложение /.test(h));
+      ok(apps.every((h, i) => h.indexOf('Приложение ' + LS[i] + '.') === 0), m.id + ': приложения А, Б, В… (' + apps.length + ')');
+      ok(hs.length === 0 || hs.findIndex(h => /^Приложение /.test(h)) < 0 || hs.slice(hs.findIndex(h => /^Приложение /.test(h))).every(h => /^Приложение /.test(h)), m.id + ': приложения только в конце');
+    });
+    const inv = hh(heads('investment'));
+    ok(/^1\. Резюме/.test(inv[0]), 'инвестпредложение начинается с резюме');
+    ok(inv.findIndex(h => /Структура сделки/.test(h)) > inv.findIndex(h => /Стоимость проекта/.test(h)) && inv.findIndex(h => /Финансовая модель/.test(h)) > inv.findIndex(h => /Структура сделки/.test(h)), 'порядок: стоимость → сделка → финансовая модель');
+    ok(inv.findIndex(h => /Риски/.test(h)) > inv.findIndex(h => /Финансовая модель/.test(h)), 'риски идут после финансовой модели');
+    const secs = heads('investment');
+    secs.forEach(s => {
+      const h = s.querySelector('h2').textContent.trim(), lab = (h.match(/^(\d+)\./) || h.match(/^Приложение (.)\./) || [])[1];
+      const subs = [...s.querySelectorAll('h3,h4,strong,b')].map(e => e.textContent.trim()).filter(x => /^[0-9А-Я]{1,2}\.\d+\./.test(x));
+      if (lab && subs.length) ok(subs.every(x => x.split('.')[0] === lab), 'подпункты «' + h.slice(0, 30) + '» начинаются с «' + lab + '.»');
+    });
+    const sum = secs[0].textContent, Nf = st.params.project.farmsCount;
+    ok(sum.indexOf('1 ферма') >= 0 && sum.indexOf(Nf + ' ферм') >= 0, 'резюме: колонки «1 ферма» и «' + Nf + ' ферм»');
+    const cap = w.MTF.runModel(st).capex.total;
+    ok(sum.replace(/\s/g, '').indexOf(String(Math.round(cap * Nf))) >= 0, 'резюме: стоимость на ' + Nf + ' ферм = стоимость фермы × ' + Nf);
+    const allTxt = secs.map(s => s.textContent).join(' ');
+    const rnSec = secs.find(s => /Обновление/.test(s.querySelector('h2').textContent)), rnTbl = rnSec && [...rnSec.querySelectorAll('table')].pop();
+    const years = rnTbl ? [...rnTbl.querySelectorAll('tbody tr')].map(r => r.children[0].textContent.trim()) : [];
+    const yr = years.filter(y => !/^Итого/.test(y));
+    ok(yr.length > 0 && yr.every(y => /^\d{4}$/.test(y)), 'график обновления: годы без пробела (' + yr.slice(0, 3).join(', ') + ')');
+    ok(!/NaN|undefined|Infinity|\{\{/.test(allTxt), 'в тексте документа нет NaN, undefined и нераскрытых {{}}');
     finish();
   });
 }
