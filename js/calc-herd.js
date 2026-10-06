@@ -40,6 +40,36 @@ MTF.annualYield = function (P) {
   return P.milkYield; // уже годовой на фуражную
 };
 
+/* Выбраковка коров в году проекта: в первые годы может быть ниже,
+   чем в установившемся режиме (стадо молодое, почти все коровы — первотёлки). */
+MTF.cullRateAt = function (P, yearIdx) {
+  const n = P.cullRateStartYears || 0;
+  if (n > 0 && yearIdx < n && P.cullRateStart !== undefined && P.cullRateStart !== null) {
+    return P.cullRateStart;
+  }
+  return P.cullRate;
+};
+
+/* График продажи лишних тёлок, приведённый к рабочему виду.
+   Если график не задан, всё продаётся в возрасте продажи телят. */
+MTF.salePlanOf = function (P) {
+  const saleAge = Math.max(1, P.calfSaleAgeMo || 2);
+  const raw = Array.isArray(P.salePlan) && P.salePlan.length
+    ? P.salePlan : [{ age: saleAge, share: 100, price: 0 }];
+  const rows = raw.map(function (r) {
+    return {
+      age: Math.max(saleAge, Math.min(29, Math.round(+r.age || saleAge))),
+      share: Math.max(0, +r.share || 0),
+      price: Math.max(0, +r.price || 0)
+    };
+  }).filter(function (r) { return r.share > 0; });
+  if (!rows.length) rows.push({ age: saleAge, share: 100, price: 0 });
+  const total = rows.reduce(function (a, r) { return a + r.share; }, 0);
+  rows.forEach(function (r) { r.frac = r.share / total; });
+  rows.sort(function (a, b) { return a.age - b.age; });
+  return rows;
+};
+
 MTF.calcHerd = function (p) {
   const H = p.herd, P = p.production, C = p.capacity;
   const months = p.project.horizon * 12;
@@ -59,6 +89,11 @@ MTF.calcHerd = function (p) {
   const pregHeifers = {};
   const heifers = new Array(32).fill(0);
   const bulls = new Array(32).fill(0);
+
+  // Лишние тёлки, дожидающиеся продажи по графику: по одному массиву возрастов на каждую ступень
+  const salePlan = MTF.salePlanOf(P);
+  const keepRatio = (P.heiferKeepRatio || 130) / 100;
+  const surp = salePlan.map(function () { return new Array(32).fill(0); });
 
   // График завоза
   const arrivals = {};
@@ -92,6 +127,7 @@ MTF.calcHerd = function (p) {
       calvesSoldM: 0, calvesSoldF: 0, cullSold: 0,
       bullsSold: 0, bullWeightKg: 0,
       heifersPurchased: 0, surplusSold: 0,
+      heifersSold: 0, heifersSoldValue: 0,
       warnings: []
     };
   }
@@ -99,6 +135,7 @@ MTF.calcHerd = function (p) {
 
   for (let m = 1; m <= months; m++) {
     const yIdx = Math.floor((m - 1) / 12);
+    const cullNow = MTF.cullRateAt(P, yIdx);
 
     if (arrivals[m]) {
       const q = Math.round((P.quarantineDays || 0) / 30);
@@ -110,7 +147,7 @@ MTF.calcHerd = function (p) {
     // Ежегодный докуп при ремонте покупкой
     if (P.remontMode !== 'own' && m > 12 && m % 12 === 1) {
       const gap = Math.max(0, target - cows);
-      const need = Math.round(cows * P.cullRate / 100 + Math.min(gap, target * 0.25));
+      const need = Math.round(cows * cullNow / 100 + Math.min(gap, target * 0.25));
       if (need > 0) {
         const q = Math.round((P.quarantineDays || 0) / 30);
         const at = m + Math.max(1, 9 - H.gestationOnArrival) + q;
@@ -136,8 +173,8 @@ MTF.calcHerd = function (p) {
     heifers[0] += females;
     bulls[0] += born - females;
 
-    const culled = cows * (P.cullRate / 100) / 12;
-    firstLact = Math.max(0, firstLact - firstLact * (P.cullRate / 100) / 12);
+    const culled = cows * (cullNow / 100) / 12;
+    firstLact = Math.max(0, firstLact - firstLact * (cullNow / 100) / 12);
     cows -= culled;
     acc.cullSold += culled;
 
@@ -147,15 +184,46 @@ MTF.calcHerd = function (p) {
     }
     heifers[0] = 0; bulls[0] = 0;
 
+    // лишние тёлки стареют вместе с остальными
+    surp.forEach(function (arr) {
+      for (let a = 31; a > 0; a--) arr[a] = arr[a - 1] * (1 - P.heiferMortality / 100 / 12);
+      arr[0] = 0;
+    });
+
     const saleAge = Math.max(1, P.calfSaleAgeMo);
 
+    // продажа ступеней графика, у которых наступил возраст
+    salePlan.forEach(function (t, j) {
+      if (t.age > saleAge && surp[j][t.age] > 0) {
+        acc.heifersSold += surp[j][t.age];
+        acc.heifersSoldValue += surp[j][t.age] * t.price;
+        surp[j][t.age] = 0;
+      }
+    });
+
     if (P.remontMode === 'own') {
+      // отбор на ремонт: пока стадо не вышло на мощность, остаются все тёлки;
+      // после выхода остаётся нужное для замены, лишние идут по графику продажи
       const avail = heifers[saleAge];
-      const keep = cows < target * 0.98
-        ? avail
-        : Math.min(avail, cows * (P.cullRate / 100) / 12 * 1.3);
+      // Стадо считается вышедшим на мощность с допуском в полторы месячные выбраковки:
+      // после ежемесячной выбраковки поголовье всегда чуть ниже цели, и жёсткий порог
+      // (98% от цели) не срабатывал никогда — все тёлки копились до первого отёла.
+      const monthlyCull = cows * (cullNow / 100) / 12;
+      const atCapacity = cows >= target - monthlyCull * 1.5;
+      const keep = atCapacity ? Math.min(avail, monthlyCull * keepRatio) : avail;
       heifers[saleAge] = keep;
-      acc.calvesSoldF += Math.max(0, avail - keep);
+      const surplus = Math.max(0, avail - keep);
+      if (surplus > 0) {
+        salePlan.forEach(function (t, j) {
+          const part = surplus * t.frac;
+          if (t.age <= saleAge) {
+            acc.heifersSold += part;
+            acc.heifersSoldValue += part * p.prices.calf;
+          } else {
+            surp[j][saleAge] += part;
+          }
+        });
+      }
     } else {
       acc.calvesSoldF += heifers[saleAge];
       heifers[saleAge] = 0;
@@ -188,9 +256,14 @@ MTF.calcHerd = function (p) {
     acc.milkLiters += effCows * yieldYear / 12;
 
     // ----- Контроль скотомест -----
-    const heiferTotal = heifers.slice(saleAge + 1).reduce((a, b) => a + b, 0);
+    const sumArr = function (arr, from, to) {
+      let t = 0; for (let a = from; a < (to === undefined ? arr.length : to); a++) t += arr[a]; return t;
+    };
+    const surpOld = surp.reduce(function (a, arr) { return a + sumArr(arr, saleAge + 1); }, 0);
+    const surpCalf = surp.reduce(function (a, arr) { return a + sumArr(arr, 0, saleAge + 1); }, 0);
+    const heiferTotal = heifers.slice(saleAge + 1).reduce((a, b) => a + b, 0) + surpOld;
     const calfTotal = heifers.slice(0, saleAge + 1).reduce((a, b) => a + b, 0) +
-                      bulls.slice(0, saleAge + 1).reduce((a, b) => a + b, 0);
+                      bulls.slice(0, saleAge + 1).reduce((a, b) => a + b, 0) + surpCalf;
     const bullTotal = bulls.slice(saleAge + 1).reduce((a, b) => a + b, 0);
     const dry = cows * shares.dry;
     const pen = cows * shares.pen;
@@ -231,6 +304,9 @@ MTF.calcHerd = function (p) {
         milkPerCow: cows > 0 ? acc.milkLiters / cows : 0,
         calvesSold: acc.calvesSoldM + acc.calvesSoldF,
         surplusSold: acc.surplusSold,
+        heifersSold: acc.heifersSold,
+        heifersSoldValue: acc.heifersSoldValue,
+        cullRate: cullNow,
         cullSold: acc.cullSold,
         bullsSold: acc.bullsSold,
         bullWeightKg: acc.bullWeightKg,
