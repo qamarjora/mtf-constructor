@@ -355,7 +355,7 @@ MTF.docTables = function (state, res) {
       ['Удой на фуражную корову, л/год', f.num(res.herd.meta.yieldYear)],
       ['Доля дойных в стаде', f.pct(res.herd.meta.milkingShare * 100, 0)],
       ['Выход телят на 100 коров', f.num(p.production.calvingRate)],
-      ['Выбраковка, % в год', f.num(p.production.cullRate)],
+      ...MTF.docCullRows(p, f),
       ['Дней сухостоя', f.num(p.production.dryDays)],
       ['Возраст первого отёла, мес.', f.num(p.production.firstCalvingMo)]
     ]),
@@ -635,3 +635,93 @@ MTF.docHtml = function (state, secs) {
     '</div></div>' +
     secs.map(s => '<section><h2>' + s.title + '</h2>' + s.body + '</section>').join('');
 };
+
+/* Строки таблицы продуктивности: выбраковка по годам и схема продажи лишних тёлок */
+MTF.docCullRows = function (p, f) {
+  const P = p.production;
+  const rows = [['Выбраковка, % в год', P.cullRateStartYears > 0
+    ? f.num(P.cullRateStart) + '% в первые ' + f.num(P.cullRateStartYears) + ' г., затем ' + f.num(P.cullRate) + '%'
+    : f.num(P.cullRate)]];
+  if (P.remontMode === 'own' && MTF.salePlanOf) {
+    rows.push(['Продажа лишних тёлок', MTF.salePlanOf(P).map(function (t) {
+      return f.num(t.frac * 100, 0) + '% в ' + f.num(t.age) + ' мес.';
+    }).join(', ')]);
+  }
+  return rows;
+};
+
+/* ---------- Раздел «Персонал и оплата труда» ----------
+   Показывает три блока ФОТ: что считается на ферму, а что на весь проект. */
+(function () {
+  const section = {
+    id: 'staff', title: '19. Персонал и оплата труда', enabled: false,
+    body: `Фонд оплаты труда сформирован тремя блоками. Блок фермы считается на каждую ферму отдельно. Общие блоки обслуживают все фермы проекта, и их стоимость распределяется между фермами поровну.
+
+{{staffBlocksTable}}
+
+{{staffNote}}
+
+**Штатное расписание**
+
+{{staffRosterTable}}`
+  };
+  const ei = MTF.docSections.findIndex(function (x) { return x.id === 'equipment'; });
+  if (ei >= 0) MTF.docSections.splice(ei + 1, 0, section); else MTF.docSections.push(section);
+
+  ['passport', 'bizplan', 'investment'].forEach(function (id) {
+    const m = MTF.docModes.find(function (x) { return x.id === id; });
+    if (m && m.sections && m.sections.indexOf('staff') < 0) {
+      const i = m.sections.indexOf('equipment');
+      if (i >= 0) m.sections.splice(i + 1, 0, 'staff'); else m.sections.push('staff');
+    }
+  });
+
+  const orig = MTF.docTables;
+  MTF.docTables = function (state, res) {
+    const t = orig(state, res);
+    if (!(state.params.project && state.params.project.type === 'feedlot')) {
+      const p = state.params, f = MTF.fmt;
+      const cows = res.herd && res.herd.meta ? res.herd.meta.target : 0;
+      const pr = MTF.calcPayroll(p, state.staff, cows);
+      const N = pr.farms || MTF.staffDivisor(p);
+      const taxK = 1 + MTF.payrollTaxRate / 100;
+      const dash = '—';
+      const tbl = function (head, rows) {
+        return dt(head, rows);
+      };
+
+      t.staffBlocksTable = tbl(
+        ['Блок', 'Человек на проект', 'ФОТ на проект, тыс. ₸', 'ФОТ на одну ферму, тыс. ₸'],
+        pr.blocks.map(function (b) {
+          const filled = b.netTotal > 0;
+          const heads = b.scope === 'project' ? b.headcountFull : b.headcountFull * N;
+          const how = b.scope === 'project' ? 'на проект, делится на ' + N + ' ферм' : 'на каждую ферму';
+          return [b.name + ' (' + how + ')', filled ? f.num(heads, 0) : dash,
+            filled ? f.num(b.grossTotal) : dash, filled ? f.num(b.gross) : dash];
+        }).concat([[
+          '<b>Итого</b>', '', '<b>' + f.num(pr.gross * N) + '</b>', '<b>' + f.num(pr.gross) + '</b>'
+        ]]));
+
+      t.staffNote = '<p>Суммы приведены с начислениями на оклады (' + MTF.payrollTaxRate +
+        '%), при проектной мощности фермы, в ценах первого года расчёта. В расчёте на одну ферму ' +
+        'учтена 1/' + N + ' часть общих блоков. В пересчёте на одну фуражную корову фонд оплаты труда ' +
+        'фермы составляет ' + f.num(cows > 0 ? pr.gross / cows : 0, 1) + ' тыс. ₸ в год.</p>';
+
+      const rowsOut = [];
+      pr.blocks.forEach(function (b) {
+        const list = state.staff.filter(function (s) { return (s.block || 'farm') === b.id && s.count > 0; });
+        if (!list.length) return;
+        rowsOut.push(['<b>' + b.name + '</b>', '', '', '']);
+        list.forEach(function (s) {
+          rowsOut.push([s.name, f.num(s.count), f.num(s.salary), f.num(s.count * s.salary * 12 * taxK)]);
+        });
+      });
+      t.staffRosterTable = rowsOut.length
+        ? tbl(['Должность', 'Количество', 'Оклад на руки, тыс. ₸ в мес.', 'В год с начислениями, тыс. ₸'], rowsOut)
+        : '<p><i>Штатное расписание уточняется.</i></p>';
+    } else {
+      t.staffBlocksTable = ''; t.staffNote = ''; t.staffRosterTable = '';
+    }
+    return t;
+  };
+})();
