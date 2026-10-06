@@ -171,6 +171,7 @@ MTF.export.loadJson = function () {
         Object.keys(base.params).forEach(k => {
           MTF.state.params[k] = Object.assign({}, base.params[k], (s.params || {})[k] || {});
         });
+        if (s.params.prices && s.params.prices.revenueScope === undefined) MTF.state.params.prices.revenueScope = 'all';
         MTF.save(); MTF.render();
       } catch (e) {
         alert('Файл не читается как проект. Выберите файл, сохранённый этим инструментом.');

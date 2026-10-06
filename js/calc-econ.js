@@ -187,13 +187,17 @@ MTF.calcRevenue = function (p, herdYears) {
     const k = Math.pow(inf, i);
     const detail = {};
     detail['Молоко'] = y.milkLiters * p.prices.milk * k / 1000;
-    if (y.calvesSold > 0) detail['Реализация телят'] = y.calvesSold * p.prices.calf * k;
-    if (y.heifersSoldValue > 0) detail['Реализация тёлок'] = y.heifersSoldValue * k;
-    if (y.cullSold > 0) detail['Выбракованные коровы'] = y.cullSold * p.prices.cullCow * k;
-    if (y.surplusSold > 0)
-      detail['Сверхремонтные нетели'] = y.surplusSold * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) *
-        ((p.herd.surplusHeiferPct === undefined ? 85 : p.herd.surplusHeiferPct) / 100) * k;
-    if (y.bullsSold > 0) detail['Реализация бычков'] = y.bullWeightKg * p.prices.bullKg * k / 1000;
+    // Побочная продукция входит в выручку, только если так выбрано (prices.revenueScope).
+    // Старые проекты без поля считаются полной выручкой, как раньше.
+    if (p.prices.revenueScope !== 'milk') {
+      if (y.calvesSold > 0) detail['Реализация телят'] = y.calvesSold * p.prices.calf * k;
+      if (y.heifersSoldValue > 0) detail['Реализация тёлок'] = y.heifersSoldValue * k;
+      if (y.cullSold > 0) detail['Выбракованные коровы'] = y.cullSold * p.prices.cullCow * k;
+      if (y.surplusSold > 0)
+        detail['Сверхремонтные нетели'] = y.surplusSold * p.herd.heiferPrice * MTF.rate(p, p.herd.heiferCurrency) *
+          ((p.herd.surplusHeiferPct === undefined ? 85 : p.herd.surplusHeiferPct) / 100) * k;
+      if (y.bullsSold > 0) detail['Реализация бычков'] = y.bullWeightKg * p.prices.bullKg * k / 1000;
+    }
 
     const total = Object.values(detail).reduce((a, b) => a + b, 0);
     return { year: y.year, idx: i, detail: detail, total: total };

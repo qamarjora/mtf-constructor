@@ -5,7 +5,7 @@
 
 window.MTF = window.MTF || {};
 
-MTF.VERSION = '1.3.3';
+MTF.VERSION = '1.3.4';
 
 /* ---------- Валюты ----------
    base — валюта расчёта. Все суммы приводятся к ней.
@@ -122,6 +122,7 @@ MTF.defaults = {
     calf: 95,
     cullCow: 480,
     bullKg: 1900,
+    revenueScope: 'milk',   // что входит в выручку: 'milk' — только молоко, 'all' — ещё телята, молодняк, выбраковка
     priceInflation: 6,
     costInflation: 8
   },

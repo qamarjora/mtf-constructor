@@ -318,6 +318,9 @@ MTF.renderInputs = function (res) {
     '</div>' +
 
     '<div class="card"><h3>Цены реализации</h3>' +
+    field('В выручку включать', 'prices.revenueScope', '', 'select',
+      [['milk', 'Только молоко'], ['all', 'Молоко, телята, молодняк, выбраковка']]) +
+    (P.prices.revenueScope === 'milk' ? '<div class="hint">Продажа телят, молодняка, нетелей и выбракованных коров в расчёт не входит; цены ниже на выручку не влияют.</div>' : '') +
     field('Молоко', 'prices.milk', '₸/л') +
     field('Телёнок', 'prices.calf', 'т.₸') +
     field('Выбракованная корова', 'prices.cullCow', 'т.₸') +
@@ -1020,6 +1023,8 @@ MTF.load = function () {
     Object.keys(base.params).forEach(k => {
       base.params[k] = Object.assign({}, base.params[k], o.params[k] || {});
     });
+    // проект, сохранённый до появления выбора, считался с полной выручкой — не меняем его молча
+    if (o.params.prices && o.params.prices.revenueScope === undefined) base.params.prices.revenueScope = 'all';
     const st = {
       params: base.params,
       capexItems: Array.isArray(o.capexItems) && o.capexItems.length ? o.capexItems : base.capexItems,
