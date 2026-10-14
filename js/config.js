@@ -102,6 +102,10 @@ MTF.defaults = {
     landHa: 1000,
     landHaPerCow: 1.5,
     landCostPerHa: 220000,
+    contractorAnnual: 400000,     // режим contractor: затраты на корма на ферму в год, все группы, тыс. ₸ (цены 1-го года, проектная мощность)
+    contractorWeightHeifer: 35,   // вес тёлки относительно коровы, % (ориентир dmHeifer / dmCow = 7 / 20)
+    contractorWeightCalf: 15,     // вес телёнка относительно коровы, % (ориентир dmCalf / dmCow = 3 / 20)
+    contractorIndexPct: 0,        // пересмотр цены подрядчиком, % в год (0 — цена фиксирована на весь срок)
     machineryMode: 'own',    // own | complex — при complex (только при mode own) технику и полевые работы выполняет АУП комплекса
     lumpAnnual: 0            // фиксированная сумма в год, тыс. ₸
   },

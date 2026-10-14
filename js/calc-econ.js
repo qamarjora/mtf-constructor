@@ -120,15 +120,46 @@ MTF.calcPayroll = function (p, staff, cows) {
 };
 
 /* ---------- Корма ---------- */
-MTF.calcFeed = function (p, y) {
+
+/* Режим contractor: подрядчик заготавливает корма на арендной земле и продаёт ферме по фиксированной цене.
+   Тариф на условную голову = годовая сумма на ферму ÷ (коровы + тёлки × вес + телята × вес) на проектной мощности.
+   Коровы — мощность (target), тёлки и телята — последнего года горизонта (декабрь), чтобы поголовье мощности
+   не вводить вручную. Бычки без веса. ready = false, если стадо в последнем году не вышло на мощность. */
+MTF.contractorMix = function (p, herdYears) {
+  const F = p.feed;
+  const last = herdYears && herdYears.length ? herdYears[herdYears.length - 1] : null;
+  const meta = herdYears && herdYears.meta;
+  const cows = meta && meta.target > 0 ? meta.target : (last ? last.cows : 0);
+  const wH = (F.contractorWeightHeifer === undefined ? 35 : F.contractorWeightHeifer) / 100;
+  const wC = (F.contractorWeightCalf === undefined ? 15 : F.contractorWeightCalf) / 100;
+  const annual = F.contractorAnnual === undefined ? 400000 : F.contractorAnnual;
+  const heifers = last ? last.heifers : 0, calves = last ? last.calves : 0;
+  const units = cows + heifers * wH + calves * wC;
+  return {
+    cows: cows, heifers: heifers, calves: calves, wHeifer: wH, wCalf: wC,
+    units: units, annual: annual, tariff: units > 0 ? annual / units : 0,
+    lastCows: last ? last.cows : 0, ready: !!last && last.cows >= cows * 0.99
+  };
+};
+
+/* i — номер года расчёта с нуля, herdYears — стадо по годам (нужны только режиму contractor).
+   indexed: true — сумма уже в ценах года, costInflation к ней не применяется. */
+MTF.calcFeed = function (p, y, i, herdYears) {
   const F = p.feed;
   if (F.mode === 'lump') return { sum: F.lumpAnnual, ha: 0 };
+  if (F.mode === 'contractor') {
+    const mix = MTF.contractorMix(p, herdYears);
+    const t = mix.tariff * Math.pow(1 + (F.contractorIndexPct || 0) / 100, i || 0);
+    const parts = { cows: y.cows * t, heifers: y.heifers * mix.wHeifer * t, calves: y.calves * mix.wCalf * t };
+    return { sum: parts.cows + parts.heifers + parts.calves, ha: 0, indexed: true, parts: parts, tariff: t };
+  }
   if (F.mode === 'own') {
     const ha = F.landMode === 'perHead'
       ? Math.round(y.cows * F.landHaPerCow)
       : F.landHa;
     return { sum: ha * F.landCostPerHa / 1000, ha: ha };
   }
+  // purchase; неизвестный режим тоже считается по нормам (сообщение в res.checks, см. calc-fin.js)
   const d = 365;
   let s = 0;
   const dryHead = (y.dry || 0) + (y.pen || 0);
@@ -149,8 +180,9 @@ MTF.calcOpex = function (p, herdYears, staff, opexItems) {
     const k = Math.pow(inf, i);
     const detail = {};
 
-    const feed = MTF.calcFeed(p, y);
-    detail['Корма'] = feed.sum * k;
+    const feed = MTF.calcFeed(p, y, i, herdYears);
+    // contractor индексируется только своим полем contractorIndexPct, без costInflation
+    detail['Корма'] = feed.indexed ? feed.sum : feed.sum * k;
 
     const pr = MTF.calcPayroll(p, staff, y.cows);
     detail['Фонд оплаты труда'] = pr.gross * k;

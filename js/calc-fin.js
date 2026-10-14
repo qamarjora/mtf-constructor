@@ -237,6 +237,17 @@ MTF.runModel = function (state) {
   if (Math.abs(spreadSum - 100) > 0.5) {
     checks.push('Распределение капзатрат по годам даёт ' + spreadSum + '% вместо 100%.');
   }
+  const feedMode = p.feed && p.feed.mode;
+  if (feedMode && ['purchase', 'own', 'lump', 'contractor'].indexOf(feedMode) < 0) {
+    checks.push('Неизвестный режим кормов, использованы нормы.');
+  }
+  if (feedMode === 'contractor') {
+    const mix = MTF.contractorMix(p, herd);
+    if (!mix.ready) {
+      checks.push('Корма от подрядчика: в последнем году горизонта стадо не вышло на мощность (' +
+        Math.round(mix.lastCows) + ' из ' + Math.round(mix.cows) + ' коров), тариф на условную голову рассчитан по неполному составу.');
+    }
+  }
 
   return {
     herd: herd, capex: capex, pnl: pnl, funding: funding,
