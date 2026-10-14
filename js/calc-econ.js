@@ -53,9 +53,9 @@ MTF.calcCapex = function (p, items) {
    (так читаются проекты, сохранённые до появления блоков). */
 MTF.staffBlockIds = ['complex', 'farm', 'land'];
 MTF.staffBlockDefaults = {
-  complex: { name: 'АУП комплекса', scope: 'project', scale: false },
-  farm:    { name: 'АУП фермы и производственный персонал', scope: 'farm', scale: null },
-  land:    { name: 'Земельный фонд', scope: 'project', scale: false }
+  complex: { name: 'АУП комплекса', scope: 'project', scale: false, enabled: true },
+  farm:    { name: 'АУП фермы и производственный персонал', scope: 'farm', scale: null, enabled: true },
+  land:    { name: 'Земельный фонд', scope: 'project', scale: false, enabled: true }
 };
 
 /* На сколько ферм делятся общие блоки */
@@ -64,10 +64,14 @@ MTF.staffDivisor = function (p) {
   return n > 0 ? n : Math.max(1, (p.project && p.project.farmsCount) || 1);
 };
 
-/* Параметры блока с учётом значений по умолчанию */
+/* Параметры блока с учётом значений по умолчанию.
+   enabled === false — блок выключен (его функции выполняет АУП комплекса): off = true,
+   стоимость блока 0. У проектов без поля enabled блок включён. */
 MTF.staffBlockOf = function (p, id) {
   const own = (p.staff && p.staff.blocks && p.staff.blocks[id]) || {};
-  return Object.assign({}, MTF.staffBlockDefaults[id], own);
+  const d = Object.assign({}, MTF.staffBlockDefaults[id], own);
+  d.off = d.enabled === false;
+  return d;
 };
 
 /* ФОТ на одну ферму. blocks — разбивка по блокам для таблиц и документа.
@@ -94,14 +98,14 @@ MTF.calcPayroll = function (p, staff, cows) {
     const d = MTF.staffBlockOf(p, id);
     const rows = staff.filter(s => (s.block || 'farm') === id);
     let net0 = 0, hc0 = 0;
-    rows.forEach(s => { net0 += s.count * s.salary * 12; hc0 += s.count; });
+    if (!d.off) rows.forEach(s => { net0 += s.count * s.salary * 12; hc0 += s.count; });
     const scaleOn = (d.scale === null || d.scale === undefined) ? !!S.scaleToHerd : !!d.scale;
     let k = 1;
     if (scaleOn && S.baseCows > 0 && cows > 0) k = Math.max(0.45, Math.min(1, cows / S.baseCows));
     const div = d.scope === 'project' ? N : 1;
     const netBlock = net0 * k;                 // весь блок
     return {
-      id: id, name: d.name, scope: d.scope, scale: scaleOn, k: k, divisor: div,
+      id: id, name: d.name, scope: d.scope, scale: scaleOn, k: k, divisor: div, off: d.off,
       rows: rows.length, headcountFull: hc0 * k,
       netTotal: d.scope === 'project' ? netBlock : netBlock * N,     // на N ферм
       grossTotal: (d.scope === 'project' ? netBlock : netBlock * N) * taxK,

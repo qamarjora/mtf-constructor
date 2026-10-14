@@ -114,7 +114,7 @@ MTF.defaults = {
     blocks: {                // три блока оплаты труда; scale: null — взять общую галочку scaleToHerd
       complex: { name: 'АУП комплекса', scope: 'project', scale: false },
       farm:    { name: 'АУП фермы и производственный персонал', scope: 'farm', scale: null },
-      land:    { name: 'Земельный фонд', scope: 'project', scale: false }
+      land:    { name: 'Земельный фонд', scope: 'project', scale: false, enabled: true }   // enabled: false — труд земельного фонда выполняет АУП комплекса
     }
   },
 

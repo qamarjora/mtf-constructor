@@ -698,7 +698,7 @@ MTF.docCullRows = function (p, f) {
 (function () {
   const section = {
     id: 'staff', title: '19. Персонал и оплата труда', enabled: false,
-    body: `Фонд оплаты труда сформирован тремя блоками. Блок фермы считается на каждую ферму отдельно. Общие блоки обслуживают все фермы проекта, и их стоимость распределяется между фермами поровну.
+    body: `{{staffIntro}}
 
 {{staffBlocksTable}}
 
@@ -736,6 +736,7 @@ MTF.docCullRows = function (p, f) {
       t.staffBlocksTable = tbl(
         ['Блок', 'Человек на проект', 'ФОТ на проект, тыс. ₸', 'ФОТ на одну ферму, тыс. ₸'],
         pr.blocks.map(function (b) {
+          if (b.off) return [b.name + ' (выполняет АУП комплекса)', dash, dash, dash];
           const filled = b.netTotal > 0;
           const heads = b.scope === 'project' ? b.headcountFull : b.headcountFull * N;
           const how = b.scope === 'project' ? 'на проект, делится на ' + N + ' ферм' : 'на каждую ферму';
@@ -745,13 +746,30 @@ MTF.docCullRows = function (p, f) {
           '<b>Итого</b>', '', '<b>' + f.num(pr.gross * N) + '</b>', '<b>' + f.num(pr.gross) + '</b>'
         ]]));
 
+      /* Число блоков и оборот про общие блоки берутся из данных; когда выключенных блоков нет,
+         текст прежний слово в слово */
+      const offBlocks = pr.blocks.filter(function (b) { return b.off; });
+      const onBlocks = pr.blocks.filter(function (b) { return !b.off; });
+      const sharedOn = onBlocks.filter(function (b) { return b.scope === 'project'; }).length;
+      const words = { 1: 'одним блоком', 2: 'двумя блоками', 3: 'тремя блоками' };
+      t.staffIntro = offBlocks.length
+        ? 'Фонд оплаты труда сформирован ' + (words[onBlocks.length] || onBlocks.length + ' блоками') + '. ' +
+          'Блок фермы считается на каждую ферму отдельно. ' +
+          (sharedOn > 1 ? 'Общие блоки обслуживают все фермы проекта, и их стоимость распределяется между фермами поровну.'
+            : sharedOn === 1 ? 'Общий блок обслуживает все фермы проекта, и его стоимость распределяется между фермами поровну.' : '')
+        : 'Фонд оплаты труда сформирован тремя блоками. Блок фермы считается на каждую ферму отдельно. ' +
+          'Общие блоки обслуживают все фермы проекта, и их стоимость распределяется между фермами поровну.';
       t.staffNote = '<p>Суммы приведены с начислениями на оклады (' + MTF.payrollTaxRate +
         '%), при проектной мощности фермы, в ценах первого года расчёта. В расчёте на одну ферму ' +
-        'учтена 1/' + N + ' часть общих блоков. В пересчёте на одну фуражную корову фонд оплаты труда ' +
+        'учтена 1/' + N + ' часть ' + (offBlocks.length && sharedOn === 1 ? 'общего блока' : 'общих блоков') + '. ' +
+        (offBlocks.length ? 'Функции ' + (offBlocks.length > 1 ? 'блоков' : 'блока') + ' «' +
+          offBlocks.map(function (b) { return b.name; }).join('», «') + '» выполняет АУП комплекса, их стоимость в расчёт не входит. ' : '') +
+        'В пересчёте на одну фуражную корову фонд оплаты труда ' +
         'фермы составляет ' + f.num(cows > 0 ? pr.gross / cows : 0, 1) + ' тыс. ₸ в год.</p>';
 
       const rowsOut = [];
       pr.blocks.forEach(function (b) {
+        if (b.off) return;
         const list = state.staff.filter(function (s) { return (s.block || 'farm') === b.id && s.count > 0; });
         if (!list.length) return;
         rowsOut.push(['<b>' + b.name + '</b>', '', '', '']);
@@ -763,7 +781,7 @@ MTF.docCullRows = function (p, f) {
         ? tbl(['Должность', 'Количество', 'Оклад на руки, тыс. ₸ в мес.', 'В год с начислениями, тыс. ₸'], rowsOut)
         : '<p><i>Штатное расписание уточняется.</i></p>';
     } else {
-      t.staffBlocksTable = ''; t.staffNote = ''; t.staffRosterTable = '';
+      t.staffIntro = ''; t.staffBlocksTable = ''; t.staffNote = ''; t.staffRosterTable = '';
     }
     return t;
   };

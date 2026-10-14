@@ -154,31 +154,39 @@ function staffBlocksHtml(P, res) {
         '<td><button class="del" data-delstaff="' + i + '">×</button></td></tr>';
     }).join('');
     const empty = idx.length === 0;
-    const unfilled = !empty && b.netTotal === 0;
+    const unfilled = !empty && !b.off && b.netTotal === 0;
     return '<div style="margin:20px 0 4px;padding-top:14px;border-top:1px solid var(--line)">' +
       '<div class="f wide"><label><b>Блок</b></label><input type="text" data-blkn="' + b.id + '" value="' + escHtml(b.name) + '"></div>' +
+      (b.id === 'land'
+        ? '<div class="f"><label>Блок включён</label><input type="checkbox" data-blken="' + b.id + '"' + (b.off ? '' : ' checked') +
+          ' style="width:18px;height:18px"><span class="u"></span></div>'
+        : '') +
       '<div class="f wide"><label>Как считается</label><select data-blks="' + b.id + '">' +
         '<option value="project"' + (b.scope === 'project' ? ' selected' : '') + '>на весь проект, делится на ' + N + ' ферм</option>' +
         '<option value="farm"' + (b.scope === 'farm' ? ' selected' : '') + '>на каждую ферму</option></select></div>' +
       '<div class="f"><label>Масштабировать под поголовье</label>' +
         '<input type="checkbox" data-blksc="' + b.id + '"' + (b.scale ? ' checked' : '') + ' style="width:18px;height:18px"><span class="u"></span></div>' +
-      (empty ? '<div class="note warn">В блоке нет должностей.</div>' :
+      (b.off ? '<div class="note ok">Выполняет АУП комплекса.</div>' +
+        '<div class="hint">Должности блока сохранены, в расчёт и в документ не входят.</div>' :
+      empty ? '<div class="note warn">В блоке нет должностей.</div>' :
         '<div class="tw"><table><thead><tr><th>Должность</th><th>Блок</th><th>Кол-во</th><th>Оклад, т.₸</th><th>В год</th><th></th></tr></thead><tbody>' +
         rows +
         '<tr class="sub"><td>С начислениями ' + MTF.payrollTaxRate + '%: на проект (' + N + ' ферм)</td><td></td><td></td><td></td><td class="n">' + f.num(b.grossTotal, 1) + '</td><td></td></tr>' +
         '<tr class="tot"><td>С начислениями: на одну ферму</td><td></td><td></td><td></td><td class="n">' + f.num(b.gross, 1) + '</td><td></td></tr>' +
         '</tbody></table></div>') +
       (unfilled ? '<div class="note warn" style="margin-top:8px">Блок не заполнен: впишите количество и оклады, пока он ничего не стоит.</div>' : '') +
-      '<div class="row" style="margin-top:10px;margin-bottom:0">' +
+      (b.off ? '' : '<div class="row" style="margin-top:10px;margin-bottom:0">' +
         '<button class="btn" data-addstaff="' + b.id + '">Добавить должность</button>' +
         (empty || b.id !== 'farm' ? '<button class="btn" data-addstd="' + b.id + '">Добавить типовые должности</button>' : '') +
-      '</div></div>';
+      '</div>') + '</div>';
   }).join('');
 
   return sections +
     '<div class="tw" style="margin-top:18px"><table><thead><tr><th>Итого</th><th>Всего на проект</th><th>На одну ферму</th></tr></thead><tbody>' +
     pr.blocks.map(function (b) {
-      return '<tr><td>' + escHtml(b.name) + '</td><td class="n">' + f.num(b.grossTotal, 1) + '</td><td class="n">' + f.num(b.gross, 1) + '</td></tr>';
+      return b.off
+        ? '<tr><td>' + escHtml(b.name) + ' (выполняет АУП комплекса)</td><td class="n">—</td><td class="n">—</td></tr>'
+        : '<tr><td>' + escHtml(b.name) + '</td><td class="n">' + f.num(b.grossTotal, 1) + '</td><td class="n">' + f.num(b.gross, 1) + '</td></tr>';
     }).join('') +
     '<tr class="tot"><td>ФОТ с начислениями</td><td class="n">' + f.num(pr.gross * N, 1) + '</td><td class="n">' + f.num(pr.gross, 1) + '</td></tr>' +
     '</tbody></table></div>' +
@@ -883,6 +891,7 @@ MTF.bind = function () {
   bindArr('[data-blkn]', el => ensureBlk(el.dataset.blkn).name = el.value);
   bindArr('[data-blks]', el => ensureBlk(el.dataset.blks).scope = el.value);
   bindArr('[data-blksc]', el => ensureBlk(el.dataset.blksc).scale = el.checked);
+  bindArr('[data-blken]', el => ensureBlk(el.dataset.blken).enabled = el.checked);
   document.querySelectorAll('[data-addstaff]').forEach(el => el.onclick = () => {
     const b = el.dataset.addstaff, n = prompt('Название должности');
     if (n) { S.staff.push({ id: 's' + Date.now(), block: b, name: n, count: 1, salary: b === 'farm' ? 400 : 0 }); upd(); }
