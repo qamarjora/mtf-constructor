@@ -246,6 +246,39 @@ MTF.runModel = function (state) {
   };
 };
 
+/* ---------- Проверки ликвидности ----------
+   По готовому денежному потоку и метрикам; вызывается после обновления основных средств
+   (renewal.js), чтобы поток уже включал эти расходы. Расчёт не меняет, только формулирует
+   сообщения: кассовый разрыв, DSCR ниже 1,0 в нескольких годах, оборотный кредит вырос и не погашался.
+   Откорм (type = feedlot) имеет свои проверки. */
+MTF.liquidityChecks = function (res, p) {
+  const out = [];
+  if (!res || !res.cf || !res.cf.rows || !res.cf.rows.length || !res.metrics || !res.metrics.dscr) return out;
+  if (p && p.project && p.project.type === 'feedlot') return out;
+  const num = v => Math.round(v).toLocaleString('ru-RU');
+  const start = p.project.startYear, rows = res.cf.rows;
+
+  if (res.cf.gapYear) {
+    out.push('Кассовый разрыв с ' + res.cf.gapYear + ' г.: накопленный денежный поток уходит ниже нуля, ' +
+      'минимальный остаток ' + num(res.cf.minCash) + ' тыс. ₸.');
+  }
+
+  // со 2-го года: в первый год платятся только проценты, показатель не показательный
+  const later = res.metrics.dscr.filter(d => d.year > start && d.value !== null && d.value !== undefined && isFinite(d.value));
+  const low = later.filter(d => d.value < 1);
+  if (low.length >= 3) {
+    out.push('Покрытие долга (DSCR) ниже 1,0 в ' + low.length + ' из ' + later.length + ' лет, считая со 2-го года, ' +
+      'впервые в ' + low[0].year + ' г.: операционного потока не хватает на платежи по кредиту.');
+  }
+
+  const last = rows[rows.length - 1];
+  if (last.wcBalance > 0 && res.cf.wcPeak > 0 && rows.every(r => !(r.wcRepay > 0))) {
+    out.push('Оборотный кредит вырос до ' + num(last.wcBalance) + ' тыс. ₸ к ' + last.year + ' г. и не погашался ' +
+      '(лимит ' + num(res.cf.wcCap) + ' тыс. ₸).');
+  }
+  return out;
+};
+
 /* ---------- Влияние господдержки ----------
    Один набор цифр для документа и для вкладки «Финансирование»,
    чтобы сравнение нигде не разъезжалось.

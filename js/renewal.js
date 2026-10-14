@@ -85,6 +85,14 @@ MTF.calcRenewal = function (p, res, cycles) {
 (function () {
   const origRun = MTF.runModel;
 
+  /* Проверки ликвидности смотрят на поток после обновления основных средств,
+     поэтому добавляются здесь, на любом выходе из обёртки. res.liquidity — для документа. */
+  const finish = function (res, p) {
+    res.liquidity = MTF.liquidityChecks ? MTF.liquidityChecks(res, p) : [];
+    if (res.liquidity.length) res.checks = (res.checks || []).concat(res.liquidity);
+    return res;
+  };
+
   MTF.runModel = function (state) {
     const res = origRun.apply(this, arguments);
     const p = state.params;
@@ -96,7 +104,7 @@ MTF.calcRenewal = function (p, res, cycles) {
     const rn = MTF.calcRenewal(p, res, cycles);
     res.renewal = rn;
 
-    if (!enabled || rn.total <= 0) return res;
+    if (!enabled || rn.total <= 0) return finish(res, p);
 
     /* Расход на обновление уменьшает свободный поток того года.
        Операционная EBITDA не трогается — это капитальные вложения,
@@ -131,7 +139,7 @@ MTF.calcRenewal = function (p, res, cycles) {
         res.noSubsidy.funding, res.noSubsidy.pnl, res.noSubsidy.debt, res.herd, true);
     }
 
-    return res;
+    return finish(res, p);
   };
 })();
 

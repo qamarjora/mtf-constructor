@@ -1,4 +1,4 @@
-/* Переключатели: труд земельного фонда (staff.blocks.land.enabled) и парк техники.
+/* Переключатели: труд земельного фонда (staff.blocks.land.enabled) и парк техники; проверки ликвидности.
    Запуск из корня репозитория: node tests/switches.test.js
    Грузит все скрипты в порядке index.html с заглушкой document (jsdom не нужен).
    Главное правило: при выключенных переключателях (по умолчанию) цифры и текст документа прежние. */
@@ -154,6 +154,42 @@ ok(inputsPur.indexOf('data-p="feed.machineryMode"') < 0, 'при покупны�
 ok(/value="complex" selected/.test(inputsCx) && !/value="complex" selected/.test(inputsOwn), 'выбранное значение отражается');
 const docTabOwn = (mk('own'), M.renderDocTab(rOwn)), docTabCx = (mk('complex'), M.renderDocTab(rCx));
 ok(/Машинно-технологический парк<\/label>/.test(docTabOwn) && !/Машинно-технологический парк<\/label>/.test(docTabCx), 'в списке разделов вкладки «Документ» при complex пункта парка нет');
+
+console.log('8. Проверки ликвидности (MTF.liquidityChecks): кассовый разрыв, DSCR, оборотный кредит');
+/* Реальные проекты в репозиторий не кладём; здесь проект с теми же признаками: низкая цена молока и дорогие корма.
+   Проекты 07.10.26.json и 14.10.json (и сценарий «свои корма») проверены отдельным прогоном при коммите. */
+const healthy = () => { const x = M.initState(); M.state = x; return x; };
+const failing = () => { const x = M.initState(); x.params.prices.milk = 150; x.params.feed.dmPriceCow = 110; M.state = x; return x; };
+const own = () => { const x = M.initState(); x.params.feed.mode = 'own'; M.state = x; return x; };
+const runS = x => { M.state = x; return M.runModel(x); };
+const rH = runS(healthy()), rF = runS(failing()), rO = runS(own());
+ok(Array.isArray(rH.liquidity) && rH.liquidity.length === 0, 'дефолтный проект: новых сообщений нет');
+ok(rH.checks.every(c => rH.liquidity.indexOf(c) < 0), 'дефолтный проект: res.checks не содержит сообщений ликвидности');
+ok(rO.liquidity.length === 0, 'сценарий «свои корма»: сообщений нет');
+ok(rF.liquidity.length === 3, 'проект с убытком: три сообщения (' + rF.liquidity.length + ')');
+ok(/^Кассовый разрыв с \d{4} г\./.test(rF.liquidity[0]) && rF.cf.gapYear && rF.liquidity[0].indexOf(String(rF.cf.gapYear)) >= 0, 'первое: кассовый разрыв с года ' + rF.cf.gapYear);
+ok(/^Покрытие долга \(DSCR\) ниже 1,0 в \d+ из \d+ лет, считая со 2-го года/.test(rF.liquidity[1]), 'второе: DSCR ниже 1,0 в N годах со 2-го года');
+ok(/^Оборотный кредит вырос до .* и не погашался/.test(rF.liquidity[2]), 'третье: оборотный кредит вырос и не погашался');
+ok(rF.liquidity.every(m => !/предупрежд/i.test(m)), 'в сообщениях нет слова «предупреждение»');
+ok(rF.liquidity.every(m => rF.checks.indexOf(m) >= 0), 'сообщения добавлены в res.checks');
+const nLow = rF.metrics.dscr.filter(d => d.year > 2027 && d.value !== null && d.value < 1).length;
+ok(rF.liquidity[1].indexOf('в ' + nLow + ' из ') >= 0, 'число лет с DSCR ниже 1,0 совпадает с таблицей DSCR (' + nLow + ')');
+const rF2 = (() => { const x = failing(); x.params.prices.milk = 265; x.params.feed.dmPriceCow = 90; return runS(x); })();
+ok(rF2.liquidity.length === 0, 'тот же проект с нормальной ценой молока: сообщений нет');
+const before = JSON.stringify([rF.pnl.map(y => y.ebitda), rF.metrics.npv, rF.cf.rows.map(r => r.cumulative)]);
+const nrm = runS(failing());
+ok(JSON.stringify([nrm.pnl.map(y => y.ebitda), nrm.metrics.npv, nrm.cf.rows.map(r => r.cumulative)]) === before, 'проверки расчёт не меняют (EBITDA, NPV, поток те же)');
+
+const tinv = st => { st.docSections = M.mergeDocSections(null); M.applyDocMode(st, 'investment'); return M.renderDoc(st, runS(st)); };
+const risksOf = secs => secs.find(x => /Риски и их снижение/.test(x.title)).body;
+const riskF = risksOf(tinv(failing())), riskH = risksOf(tinv(healthy()));
+ok(riskF.indexOf('Кассовый разрыв с') >= 0 && riskF.indexOf('Оборотный кредит вырос') >= 0, 'документ: в разделе «Риски» есть строка с выводами по ликвидности');
+ok(riskF.indexOf('Значение DSCR ниже 1 означает') < riskF.indexOf('Кассовый разрыв с'), 'выводы стоят после общей фразы про DSCR');
+ok(riskH.indexOf('Кассовый разрыв') < 0 && riskH.indexOf('Покрытие долга (DSCR) ниже 1,0') < 0 && riskH.indexOf('Значение DSCR ниже 1 означает') >= 0, 'документ здорового проекта: общая фраза есть, выводов нет');
+const fF = (M.state = failing(), M.renderFin(runS(M.state)));
+ok(fF.indexOf('Покрытие долга (DSCR) ниже 1,0 в') < 0 && fF.indexOf('Оборотный кредит вырос до') < 0, 'вкладка «Финансирование» не дублирует новые сообщения');
+const iF = (M.state = failing(), M.renderInputs(runS(M.state)));
+ok(iF.indexOf('Кассовый разрыв с') >= 0, 'вкладка «Вводные»: сообщения видны среди проверок');
 
 console.log(fails ? '\nЕсть ошибки: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);

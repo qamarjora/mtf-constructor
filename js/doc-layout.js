@@ -266,6 +266,8 @@
           m.irr !== null && m.irr !== undefined ? f.pct(m.irr * 100) : '—', isFinite(m.d2) ? f.num(m.d2, 2) : '—'];
       }));
     t.riskSensTable += '\n<p><i>Ставка по кредиту влияет на покрытие долга (DSCR), но не на NPV и IRR проекта. Значение DSCR ниже 1 означает, что операционного дохода не хватает на платежи по кредиту.</i></p>';
+    // выводы по ликвидности отдельной строкой; на вкладке «Финансирование» они уже показаны своими заметками
+    if (res.liquidity && res.liquidity.length) t.riskSensTable += '\n<p>' + res.liquidity.join(' ') + '</p>';
 
     // блоки, которые подмешиваются только в инвестиционный вид
     t.estimateTotalBlock = inv ? '' : '**Стоимость проекта в целом**\n\n' + (t.estimateTotalTable || '');
