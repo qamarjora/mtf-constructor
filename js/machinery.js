@@ -87,7 +87,9 @@ MTF.calcMachinery = function (p, res, list) {
 /* Технику и полевые работы выполняет АУП комплекса: парк не показывается ни в «Экономике», ни в документе.
    Действует только при своей кормовой базе; у старых проектов без поля — как own. */
 MTF.machineryOff = function (p) {
-  return !!(p && p.feed && p.feed.mode === 'own' && p.feed.machineryMode === 'complex');
+  if (!(p && p.feed)) return false;
+  // contractor: корма заготавливает подрядчик, свой парк не нужен (производно от режима, в проект не записывается)
+  return p.feed.mode === 'contractor' || (p.feed.mode === 'own' && p.feed.machineryMode === 'complex');
 };
 
 /* ---------- Раздел документа ---------- */
@@ -166,9 +168,12 @@ MTF.machineryOff = function (p) {
       ['Кормовые угодья, га', f.num(M.landPerFarm), f.num(M.landTotal)]
     ]);
 
-    t.feedBaseBlock = MTF.machineryOff(p)
-      ? '\n\n**2.5. Кормовая база**\n\n' + t.machineryLandTable + '\n\nТехника и полевые работы выполняет АУП комплекса.'
-      : '';
+    t.feedBaseBlock = !MTF.machineryOff(p) ? '' : (p.feed.mode === 'contractor'
+      ? '\n\n**2.5. Кормовая база**\n\n' + t.machineryLandTable + '\n\nКорма поставляет подрядчик по фиксированной цене: ' +
+        'он заготавливает их на арендной земле и продаёт ферме. Землю арендует и ведёт АУП комплекса, аренда учтена на уровне ' +
+        'комплекса и в расчёт фермы не входит. Затраты фермы на корма — ' + f.num(p.feed.contractorAnnual) +
+        ' тыс. ₸ в год на проектной мощности (в ценах первого года).'
+      : '\n\n**2.5. Кормовая база**\n\n' + t.machineryLandTable + '\n\nТехника и полевые работы выполняет АУП комплекса.');
 
     const groups = [];
     M.rows.forEach(r => { if (groups.indexOf(r.group) < 0) groups.push(r.group); });
@@ -267,6 +272,11 @@ MTF.machineryOff = function (p) {
 
   MTF.renderMachineryCard = function (res) {
     const P = MTF.state.params, f = MTF.fmt;
+    if (MTF.machineryOff(P) && P.feed.mode === 'contractor') {
+      return '<div class="card" style="margin-top:14px"><h3>Машинно-технологический парк</h3>' +
+        '<div class="note ok">Корма поставляет подрядчик по фиксированной цене, свой парк техники не нужен.</div>' +
+        '<div class="hint">Список техники сохранён и не используется. Вернуть парк можно, выбрав другой режим кормов на вкладке «Вводные».</div></div>';
+    }
     if (MTF.machineryOff(P)) {
       return '<div class="card" style="margin-top:14px"><h3>Машинно-технологический парк</h3>' +
         '<div class="note ok">Техника и полевые работы выполняет АУП комплекса.</div>' +

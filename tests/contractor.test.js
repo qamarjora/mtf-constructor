@@ -109,5 +109,55 @@ ok(iC.indexOf('data-p="feed.landHaPerCow"') >= 0 && /справочно/.test(iC
 ok(/Тариф: <b>677,9 тыс\. ₸<\/b> в год на корову \(<b>1\s?857 ₸<\/b> в сутки\)/.test(iC), 'подсказка показывает тариф (677,9 тыс. ₸, 1 857 ₸ в сутки)');
 ok(iP.indexOf('Тариф:') < 0 && iP.indexOf('data-p="feed.dmCow"') >= 0, 'режим purchase: прежняя карточка с нормами СВ');
 
+console.log('6. Автоотключение блока «Земельный фонд» и парка при contractor (производное)');
+const withLand = over => (st => { st.staff.forEach(x => { if (x.block === 'land') { x.count = 2; x.salary = 300; } }); if (over) over(st); })
+const landStaff = st => st.staff.forEach(x => { if (x.block === 'land') { x.count = 2; x.salary = 300; } });
+const cx = (over) => contractor(0, st => { landStaff(st); if (over) over(st); });
+const pc = cx(), pp = project(landStaff);
+const bC = M.staffBlockOf(pc.params, 'land'), bP = M.staffBlockOf(pp.params, 'land');
+ok(bC.off === true && bC.offReason === 'contractor' && bP.off === false && bP.offReason === '', 'contractor: блок land off (причина contractor); purchase: включён');
+ok(pc.params.staff.blocks.land.enabled === true || pc.params.staff.blocks.land.enabled === undefined, 'поле enabled при contractor не меняется (' + pc.params.staff.blocks.land.enabled + ')');
+const before = JSON.stringify(pc.params.staff.blocks); M.staffBlockOf(pc.params, 'land'); M.calcPayroll(pc.params, pc.staff, 475);
+ok(JSON.stringify(pc.params.staff.blocks) === before && !('off' in pc.params.staff.blocks.land), 'расчёт ничего не записывает в блоки (off и offReason в проект не попадают)');
+pc.params.feed.mode = 'purchase';
+ok(M.staffBlockOf(pc.params, 'land').off === false, 'при возврате к purchase блок снова включён');
+pc.params.feed.mode = 'contractor';
+const swSt = cx(st => { st.params.staff.blocks.land.enabled = false; });
+ok(M.staffBlockOf(swSt.params, 'land').offReason === 'switch', 'выключен и галочкой, и режимом: причина switch (галочка важнее)');
+const pyC = M.calcPayroll(cx().params, cx().staff, 475), pyP = M.calcPayroll(pp.params, pp.staff, 475);
+ok(pyC.blocks.find(b => b.id === 'land').gross === 0 && pyC.gross < pyP.gross, 'ФОТ земельного фонда при contractor 0, ФОТ на ферму меньше, чем при purchase');
+ok(near(run(cx(st => { st.params.staff.blocks.land.enabled = false; })).metrics.npv, run(cx()).metrics.npv, 1e-9), 'contractor с галочкой и без неё: деньги те же (блок уже выключен режимом)');
+ok(M.machineryOff(contractor(0).params) && M.machineryOff(contractor(0, st => { st.params.feed.machineryMode = 'own'; }).params), 'machineryOff при contractor не зависит от machineryMode');
+ok(!M.machineryOff(project().params) && !M.machineryOff(project(st => { st.params.feed.mode = 'own'; }).params), 'purchase и own (по умолчанию): парк не выключен');
+ok(M.machineryOff(project(st => { st.params.feed.mode = 'own'; st.params.feed.machineryMode = 'complex'; }).params), 'own + complex: парк выключен, как раньше');
+
+console.log('7. Документ и интерфейс при contractor');
+const docOf = (st, mode) => {
+  const x = c(st); M.state = x; x.docSections = M.mergeDocSections(null);
+  if (mode === 'custom') { x.docSections.forEach(s => s.enabled = true); x.docMode = 'custom'; } else M.applyDocMode(x, mode);
+  return M.renderDoc(x, M.runModel(x));
+};
+const LET = 'АБВГДЕЖИКЛМНПРСТУФХЦЧШЭЮЯ';
+['passport', 'bizplan', 'investment', 'custom'].forEach(function (mode) {
+  const a = docOf(contractor(0, landStaff), mode), p = docOf(project(landStaff), mode);
+  ok(!a.some(x => /Машинно-технологический парк/.test(x.title)) && p.some(x => /Машинно-технологический парк/.test(x.title)), mode + ': при contractor раздела парка нет, при purchase есть');
+  const nums = a.filter(x => !x.appendix).map(x => (x.title.match(/^(\d+)\./) || [])[1]).filter(Boolean).map(Number);
+  ok(nums.every((n, i) => n === i + 1) && a.filter(x => x.appendix).every((x, i) => x.title.indexOf('Приложение ' + LET[i] + '.') === 0), mode + ': нумерация разделов и буквы приложений подряд');
+  const farm = a.find(x => /Описание типовой фермы/.test(x.title)).body;
+  ok(/Кормовая база/.test(farm) && /Корма поставляет подрядчик по фиксированной цене/.test(farm) && /аренда учтена на уровне комплекса/.test(farm) &&
+     /400\s?000 тыс\. ₸ в год/.test(farm) && /Кормовые угодья, га/.test(farm), mode + ': в описании фермы подпункт «Кормовая база»: подрядчик, аренда на уровне комплекса, 400 000, таблица земли');
+  ok(!/Кормовая база/.test(p.find(x => /Описание типовой фермы/.test(x.title)).body), mode + ': при purchase блока кормовой базы нет');
+});
+const stfC = docOf(contractor(0, landStaff), 'investment').find(x => /Персонал и оплата труда/.test(x.title)).body;
+ok(/двумя блоками/.test(stfC) && /Земельный фонд \(корма поставляет подрядчик\)/.test(text(stfC)) && /корма поставляет подрядчик по фиксированной цене/.test(stfC) && !/выполняет АУП комплекса/.test(stfC), 'персонал: «двумя блоками», строка и примечание о подрядчике');
+const stfP = docOf(project(landStaff), 'investment').find(x => /Персонал и оплата труда/.test(x.title)).body;
+ok(/тремя блоками/.test(stfP) && !/подрядчик/.test(stfP), 'персонал при purchase: «тремя блоками», без подрядчика');
+ok(docOf(project(landStaff), 'investment').every(x => !/Корма поставляет подрядчик|корма поставляет подрядчик|подрядчик по фиксированной цене/.test(x.body)), 'при purchase в документе нет текстов про поставку кормов подрядчиком');
+const rcS = run(cx()); const hsAll = ctx.staffBlocksHtml(cx().params, rcS); const hs = hsAll.slice(hsAll.indexOf('data-blkn="land"'));   // только блок «Земельный фонд»
+ok(/data-blken="land"[^>]* disabled/.test(hs) && /Корма поставляет подрядчик, блок не нужен/.test(hs) && hs.indexOf('Блок не заполнен') < 0 && hs.indexOf('В блоке нет должностей') < 0 && hs.indexOf('data-addstaff="land"') < 0, 'интерфейс ФОТ: галочка неактивна, «Корма поставляет подрядчик», без предупреждений и кнопок добавления');
+ok(/Корма поставляет подрядчик по фиксированной цене, свой парк техники не нужен/.test((M.state = contractor(0), M.renderMachineryCard(run(M.state)))), 'карточка парка в «Экономике»: пояснение про подрядчика');
+const tab = (M.state = contractor(0), M.renderDocTab(run(M.state)));
+ok(!/Машинно-технологический парк<\/label>/.test(tab), 'вкладка «Документ»: пункта парка в списке разделов нет');
+
 console.log(fails ? '\nЕсть ошибки: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);

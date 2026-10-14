@@ -736,7 +736,7 @@ MTF.docCullRows = function (p, f) {
       t.staffBlocksTable = tbl(
         ['Блок', 'Человек на проект', 'ФОТ на проект, тыс. ₸', 'ФОТ на одну ферму, тыс. ₸'],
         pr.blocks.map(function (b) {
-          if (b.off) return [b.name + ' (выполняет АУП комплекса)', dash, dash, dash];
+          if (b.off) return [b.name + (b.offReason === 'contractor' ? ' (корма поставляет подрядчик)' : ' (выполняет АУП комплекса)'), dash, dash, dash];
           const filled = b.netTotal > 0;
           const heads = b.scope === 'project' ? b.headcountFull : b.headcountFull * N;
           const how = b.scope === 'project' ? 'на проект, делится на ' + N + ' ферм' : 'на каждую ферму';
@@ -762,8 +762,14 @@ MTF.docCullRows = function (p, f) {
       t.staffNote = '<p>Суммы приведены с начислениями на оклады (' + MTF.payrollTaxRate +
         '%), при проектной мощности фермы, в ценах первого года расчёта. В расчёте на одну ферму ' +
         'учтена 1/' + N + ' часть ' + (offBlocks.length && sharedOn === 1 ? 'общего блока' : 'общих блоков') + '. ' +
-        (offBlocks.length ? 'Функции ' + (offBlocks.length > 1 ? 'блоков' : 'блока') + ' «' +
-          offBlocks.map(function (b) { return b.name; }).join('», «') + '» выполняет АУП комплекса, их стоимость в расчёт не входит. ' : '') +
+        (function () {
+          const sw = offBlocks.filter(function (b) { return b.offReason !== 'contractor'; });
+          const ct = offBlocks.filter(function (b) { return b.offReason === 'contractor'; });
+          return (sw.length ? 'Функции ' + (sw.length > 1 ? 'блоков' : 'блока') + ' «' +
+              sw.map(function (b) { return b.name; }).join('», «') + '» выполняет АУП комплекса, их стоимость в расчёт не входит. ' : '') +
+            (ct.length ? (ct.length > 1 ? 'Блоки «' : 'Блок «') + ct.map(function (b) { return b.name; }).join('», «') +
+              '» в расчёт не входит: корма поставляет подрядчик по фиксированной цене. ' : '');
+        })() +
         'В пересчёте на одну фуражную корову фонд оплаты труда ' +
         'фермы составляет ' + f.num(cows > 0 ? pr.gross / cows : 0, 1) + ' тыс. ₸ в год.</p>';
 

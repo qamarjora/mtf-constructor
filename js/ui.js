@@ -158,15 +158,16 @@ function staffBlocksHtml(P, res) {
     return '<div style="margin:20px 0 4px;padding-top:14px;border-top:1px solid var(--line)">' +
       '<div class="f wide"><label><b>Блок</b></label><input type="text" data-blkn="' + b.id + '" value="' + escHtml(b.name) + '"></div>' +
       (b.id === 'land'
-        ? '<div class="f"><label>Блок включён</label><input type="checkbox" data-blken="' + b.id + '"' + (b.off ? '' : ' checked') +
-          ' style="width:18px;height:18px"><span class="u"></span></div>'
+        ? '<div class="f"><label>Блок включён</label><input type="checkbox" data-blken="' + b.id + '"' +
+          (MTF.staffBlockOf(P, b.id).enabled === false ? '' : ' checked') + (b.offReason === 'contractor' ? ' disabled' : '') +
+          ' style="width:18px;height:18px"><span class="u">' + (b.offReason === 'contractor' ? 'выключен режимом «Корма от подрядчика»' : '') + '</span></div>'
         : '') +
       '<div class="f wide"><label>Как считается</label><select data-blks="' + b.id + '">' +
         '<option value="project"' + (b.scope === 'project' ? ' selected' : '') + '>на весь проект, делится на ' + N + ' ферм</option>' +
         '<option value="farm"' + (b.scope === 'farm' ? ' selected' : '') + '>на каждую ферму</option></select></div>' +
       '<div class="f"><label>Масштабировать под поголовье</label>' +
         '<input type="checkbox" data-blksc="' + b.id + '"' + (b.scale ? ' checked' : '') + ' style="width:18px;height:18px"><span class="u"></span></div>' +
-      (b.off ? '<div class="note ok">Выполняет АУП комплекса.</div>' +
+      (b.off ? '<div class="note ok">' + (b.offReason === 'contractor' ? 'Корма поставляет подрядчик, блок не нужен.' : 'Выполняет АУП комплекса.') + '</div>' +
         '<div class="hint">Должности блока сохранены, в расчёт и в документ не входят.</div>' :
       empty ? '<div class="note warn">В блоке нет должностей.</div>' :
         '<div class="tw"><table><thead><tr><th>Должность</th><th>Блок</th><th>Кол-во</th><th>Оклад, т.₸</th><th>В год</th><th></th></tr></thead><tbody>' +
@@ -185,7 +186,7 @@ function staffBlocksHtml(P, res) {
     '<div class="tw" style="margin-top:18px"><table><thead><tr><th>Итого</th><th>Всего на проект</th><th>На одну ферму</th></tr></thead><tbody>' +
     pr.blocks.map(function (b) {
       return b.off
-        ? '<tr><td>' + escHtml(b.name) + ' (выполняет АУП комплекса)</td><td class="n">—</td><td class="n">—</td></tr>'
+        ? '<tr><td>' + escHtml(b.name) + (b.offReason === 'contractor' ? ' (корма поставляет подрядчик)' : ' (выполняет АУП комплекса)') + '</td><td class="n">—</td><td class="n">—</td></tr>'
         : '<tr><td>' + escHtml(b.name) + '</td><td class="n">' + f.num(b.grossTotal, 1) + '</td><td class="n">' + f.num(b.gross, 1) + '</td></tr>';
     }).join('') +
     '<tr class="tot"><td>ФОТ с начислениями</td><td class="n">' + f.num(pr.gross * N, 1) + '</td><td class="n">' + f.num(pr.gross, 1) + '</td></tr>' +
@@ -908,6 +909,7 @@ MTF.bind = function () {
     const sp = S.params.staff;
     sp.blocks = sp.blocks || {};
     sp.blocks[id] = Object.assign({}, MTF.staffBlockOf(S.params, id), sp.blocks[id] || {});
+    delete sp.blocks[id].off; delete sp.blocks[id].offReason;   // производные признаки в проект не пишем
     return sp.blocks[id];
   };
   bindArr('[data-stb]', el => S.staff[el.dataset.stb].block = el.value);

@@ -65,12 +65,17 @@ MTF.staffDivisor = function (p) {
 };
 
 /* Параметры блока с учётом значений по умолчанию.
-   enabled === false — блок выключен (его функции выполняет АУП комплекса): off = true,
-   стоимость блока 0. У проектов без поля enabled блок включён. */
+   off = true — блок не считается (стоимость 0): выключен галочкой или режимом кормов contractor.
+   У проектов без поля enabled блок включён. */
 MTF.staffBlockOf = function (p, id) {
   const own = (p.staff && p.staff.blocks && p.staff.blocks[id]) || {};
   const d = Object.assign({}, MTF.staffBlockDefaults[id], own);
-  d.off = d.enabled === false;
+  /* Выключен галочкой (enabled === false) или режимом кормов «от подрядчика» (для блока land):
+     во втором случае отключение производное, в проект не записывается и поле enabled не меняется. */
+  const bySwitch = d.enabled === false;
+  const byFeed = id === 'land' && !!(p && p.feed && p.feed.mode === 'contractor');
+  d.off = bySwitch || byFeed;
+  d.offReason = bySwitch ? 'switch' : (byFeed ? 'contractor' : '');
   return d;
 };
 
@@ -105,7 +110,7 @@ MTF.calcPayroll = function (p, staff, cows) {
     const div = d.scope === 'project' ? N : 1;
     const netBlock = net0 * k;                 // весь блок
     return {
-      id: id, name: d.name, scope: d.scope, scale: scaleOn, k: k, divisor: div, off: d.off,
+      id: id, name: d.name, scope: d.scope, scale: scaleOn, k: k, divisor: div, off: d.off, offReason: d.offReason,
       rows: rows.length, headcountFull: hc0 * k,
       netTotal: d.scope === 'project' ? netBlock : netBlock * N,     // на N ферм
       grossTotal: (d.scope === 'project' ? netBlock : netBlock * N) * taxK,
