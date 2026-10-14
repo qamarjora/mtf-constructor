@@ -96,5 +96,18 @@ const small = run(contractor(0, st => { st.params.herd.startHeifers = 100; }));
 ok(small.checks.some(s => /Корма от подрядчика: в последнем году горизонта стадо не вышло на мощность/.test(s)), 'стадо не вышло на мощность: сообщение о неполном составе');
 ok(rC.checks.every(s => s.indexOf('не вышло на мощность') < 0), 'стадо вышло на мощность: сообщения нет');
 
+console.log('5. Интерфейс: карточка «Корма»');
+const inp = st => { M.state = st; return M.renderInputs(run(st)); };
+const iC = inp(contractor(0)), iP = inp(project()), iO = inp(project(st => { st.params.feed.mode = 'own'; })), iL = inp(project(st => { st.params.feed.mode = 'lump'; }));
+ok(/<option value="contractor"[^>]*>Корма от подрядчика<\/option>/.test(iC), 'в списке режимов есть «Корма от подрядчика»');
+ok(/value="contractor" selected/.test(iC) && !/value="contractor" selected/.test(iP), 'выбранный режим отражается');
+['feed.contractorAnnual', 'feed.contractorWeightHeifer', 'feed.contractorWeightCalf', 'feed.contractorIndexPct'].forEach(k =>
+  ok(iC.indexOf('data-p="' + k + '"') >= 0 && iP.indexOf('data-p="' + k + '"') < 0 && iO.indexOf('data-p="' + k + '"') < 0 && iL.indexOf('data-p="' + k + '"') < 0, 'поле ' + k + ' только в режиме contractor'));
+ok(iC.indexOf('Затраты на корма на ферму в год, все группы') >= 0 && iC.indexOf('Пересмотр цены подрядчиком, % в год') >= 0, 'подписи полей по ТЗ');
+ok(iC.indexOf('data-p="feed.landCostPerHa"') < 0 && iC.indexOf('data-p="feed.dmCow"') < 0, 'в режиме contractor нет себестоимости гектара и норм СВ');
+ok(iC.indexOf('data-p="feed.landHaPerCow"') >= 0 && /справочно/.test(iC), 'площадь аренды — справочное поле');
+ok(/Тариф: <b>677,9 тыс\. ₸<\/b> в год на корову \(<b>1\s?857 ₸<\/b> в сутки\)/.test(iC), 'подсказка показывает тариф (677,9 тыс. ₸, 1 857 ₸ в сутки)');
+ok(iP.indexOf('Тариф:') < 0 && iP.indexOf('data-p="feed.dmCow"') >= 0, 'режим purchase: прежняя карточка с нормами СВ');
+
 console.log(fails ? '\nЕсть ошибки: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);
