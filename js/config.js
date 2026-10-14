@@ -102,6 +102,7 @@ MTF.defaults = {
     landHa: 1000,
     landHaPerCow: 1.5,
     landCostPerHa: 220000,
+    machineryMode: 'own',    // own | complex — при complex (только при mode own) технику и полевые работы выполняет АУП комплекса
     lumpAnnual: 0            // фиксированная сумма в год, тыс. ₸
   },
 

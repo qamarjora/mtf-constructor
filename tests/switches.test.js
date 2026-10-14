@@ -100,5 +100,60 @@ const sNone = withLandOff(project()); sNone.staff = sNone.staff.filter(x => x.bl
 const hNone = ctx.staffBlocksHtml(sNone.params, M.runModel(sNone));
 ok(hNone.indexOf('В блоке нет должностей') < 0 && hNone.indexOf('Выполняет АУП комплекса') >= 0, 'выключенный блок без должностей: «Выполняет АУП комплекса», без предупреждения');
 
+console.log('4. Парк техники (feed.machineryMode): настройка и расчёт');
+const ownSt = project(); ownSt.params.feed.mode = 'own';
+const mk = (mode, feedMode) => { const x = c(ownSt); x.params.feed.mode = feedMode || 'own'; if (mode === undefined) delete x.params.feed.machineryMode; else x.params.feed.machineryMode = mode; M.state = x; return x; };
+ok(M.defaults.feed.machineryMode === 'own', 'по умолчанию machineryMode = own');
+ok(!M.machineryOff(mk('own').params) && !M.machineryOff(mk(undefined).params), 'own и отсутствие поля (старый проект): парк включён');
+ok(M.machineryOff(mk('complex').params), 'complex при своей кормовой базе: парк выключен');
+ok(!M.machineryOff(mk('complex', 'purchase').params) && !M.machineryOff(mk('complex', 'lump').params), 'complex действует только при feed.mode = own');
+const rOwn = M.runModel(mk('own')), rCx = M.runModel(mk('complex')), rOld = M.runModel(mk(undefined));
+const sameMoney = (a, b) => near(a.capex.total, b.capex.total, 1e-9) && near(a.metrics.npv, b.metrics.npv, 1e-9) && a.pnl.every((y, i) => near(y.ebitda, b.pnl[i].ebitda, 1e-9)) && a.herd.every((y, i) => near(y.milkLiters, b.herd[i].milkLiters, 1e-9));
+ok(sameMoney(rOwn, rCx) && sameMoney(rOwn, rOld), 'деньги и стадо не меняются (парк в расчёт не входит)');
+
+console.log('5. Парк техники: карточка в «Экономике»');
+const cardOwn = (mk('own'), M.renderMachineryCard(rOwn)), cardCx = (mk('complex'), M.renderMachineryCard(rCx));
+ok(cardOwn.indexOf('Схема 1') >= 0 && cardOwn.indexOf('addMach') >= 0, 'own: карточка парка с таблицей и кнопкой');
+ok(cardCx.indexOf('Техника и полевые работы выполняет АУП комплекса') >= 0 && cardCx.indexOf('addMach') < 0 && cardCx.indexOf('Схема 1') < 0, 'complex: вместо карточки пояснение');
+const cardA = (mk('own'), M.renderMachineryCard(rOwn)), cardB = (mk(undefined), M.renderMachineryCard(rOld));
+ok(cardA === cardB, 'старый проект без поля: карточка как при own');
+
+console.log('6. Парк техники: документ');
+const modeIds = ['passport', 'bizplan', 'investment', 'custom'];
+const docOf = (st, mode) => {
+  const x = c(st); M.state = x;
+  if (mode === 'custom') { x.docSections = M.mergeDocSections(null); x.docSections.forEach(s => s.enabled = true); x.docMode = 'custom'; }
+  else { x.docSections = M.mergeDocSections(null); M.applyDocMode(x, mode); }
+  return M.renderDoc(x, M.runModel(x));
+};
+const hasMach = secs => secs.some(x => /Машинно-технологический парк/.test(x.title));
+modeIds.forEach(function (mode) {
+  const a = docOf(mk('own'), mode), b = docOf(mk('complex'), mode), o = docOf(mk(undefined), mode);
+  ok(hasMach(a), mode + ': при own раздел «Машинно-технологический парк» есть');
+  ok(JSON.stringify(a) === JSON.stringify(o), mode + ': старый проект без поля — документ побитово равен документу при own');
+  ok(!hasMach(b), mode + ': при complex раздела парка нет');
+  const mains = b.filter(x => !x.appendix).map(x => x.title), apps = b.filter(x => x.appendix).map(x => x.title);
+  const nums = mains.map(t => (t.match(/^(\d+)\./) || [])[1]).filter(Boolean).map(Number);
+  ok(nums.every((n, i) => n === i + 1), mode + ': нумерация основных разделов подряд (1…' + nums.length + ')');
+  const LET = 'АБВГДЕЖИКЛМНПРСТУФХЦЧШЭЮЯ';
+  ok(apps.every((t, i) => t.indexOf('Приложение ' + LET[i] + '.') === 0), mode + ': буквы приложений подряд (' + apps.length + ' шт.)');
+  const farm = b.find(x => /Описание типовой фермы/.test(x.title));
+  ok(/Кормовая база/.test(farm.body) && /Кормовые угодья, га/.test(farm.body) && /Техника и полевые работы выполняет АУП комплекса/.test(farm.body), mode + ': потребность в земле перенесена в «Описание типовой фермы» (подпункт «Кормовая база»)');
+  ok(!/Кормовая база<\/strong>|Кормовые угодья/.test(a.find(x => /Описание типовой фермы/.test(x.title)).body), mode + ': при own в описании фермы блока кормовой базы нет');
+  ok(/Приложение/.test(a.map(x => x.title).join('')) === (a.some(x => x.appendix)), mode + ': (контроль) приложения определены');
+});
+const inv = docOf(mk('complex'), 'investment');
+const farmCx = inv.find(x => /Описание типовой фермы/.test(x.title)).body;
+const farmNum = (inv.find(x => /Описание типовой фермы/.test(x.title)).title.match(/^(\d+)\./) || [])[1];
+ok(new RegExp('<strong>' + farmNum + '\\.5\\. Кормовая база').test(farmCx) || farmCx.indexOf(farmNum + '.5. Кормовая база') >= 0, 'подпункт кормовой базы получает номер раздела (' + farmNum + '.5)');
+
+console.log('7. Парк техники: интерфейс');
+const inputsOwn = M.renderInputs(M.runModel(mk('own'))), inputsCx = M.renderInputs(M.runModel(mk('complex'))), inputsPur = M.renderInputs(M.runModel(mk('own', 'purchase')));
+ok(inputsOwn.indexOf('data-p="feed.machineryMode"') >= 0 && inputsCx.indexOf('data-p="feed.machineryMode"') >= 0, 'переключатель есть в карточке «Корма» при режиме «Своя кормовая база»');
+ok(inputsPur.indexOf('data-p="feed.machineryMode"') < 0, 'при покупных кормах переключателя нет');
+ok(/value="complex" selected/.test(inputsCx) && !/value="complex" selected/.test(inputsOwn), 'выбранное значение отражается');
+const docTabOwn = (mk('own'), M.renderDocTab(rOwn)), docTabCx = (mk('complex'), M.renderDocTab(rCx));
+ok(/Машинно-технологический парк<\/label>/.test(docTabOwn) && !/Машинно-технологический парк<\/label>/.test(docTabCx), 'в списке разделов вкладки «Документ» при complex пункта парка нет');
+
 console.log(fails ? '\nЕсть ошибки: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);

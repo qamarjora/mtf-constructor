@@ -84,6 +84,12 @@ MTF.calcMachinery = function (p, res, list) {
   };
 };
 
+/* Технику и полевые работы выполняет АУП комплекса: парк не показывается ни в «Экономике», ни в документе.
+   Действует только при своей кормовой базе; у старых проектов без поля — как own. */
+MTF.machineryOff = function (p) {
+  return !!(p && p.feed && p.feed.mode === 'own' && p.feed.machineryMode === 'complex');
+};
+
 /* ---------- Раздел документа ---------- */
 (function () {
   if (!MTF.docSections) return;
@@ -151,11 +157,18 @@ MTF.calcMachinery = function (p, res, list) {
       r.map((c, i) => '<td' + (i > 0 ? ' class="r n"' : '') + '>' + c + '</td>').join('') +
       '</tr>').join('') + '</tbody></table>';
 
+    /* При complex раздел парка из документа исключён, а потребность в земле остаётся:
+       она уходит в «Описание типовой фермы» подпунктом «Кормовая база» (шаблон {{feedBaseBlock}}).
+       При own блок пустой, и документ прежний. */
     t.machineryLandTable = tbl(['Показатель', '1 ферма', M.farms + ' ферм'], [
       ['Фуражных коров, гол.', f.num(M.cowsPerFarm), f.num(M.cowsPerFarm * M.farms)],
       ['Норматив, га на корову', f.num(M.landPerCow, 1), f.num(M.landPerCow, 1)],
       ['Кормовые угодья, га', f.num(M.landPerFarm), f.num(M.landTotal)]
     ]);
+
+    t.feedBaseBlock = MTF.machineryOff(p)
+      ? '\n\n**2.5. Кормовая база**\n\n' + t.machineryLandTable + '\n\nТехника и полевые работы выполняет АУП комплекса.'
+      : '';
 
     const groups = [];
     M.rows.forEach(r => { if (groups.indexOf(r.group) < 0) groups.push(r.group); });
@@ -254,6 +267,11 @@ MTF.calcMachinery = function (p, res, list) {
 
   MTF.renderMachineryCard = function (res) {
     const P = MTF.state.params, f = MTF.fmt;
+    if (MTF.machineryOff(P)) {
+      return '<div class="card" style="margin-top:14px"><h3>Машинно-технологический парк</h3>' +
+        '<div class="note ok">Техника и полевые работы выполняет АУП комплекса.</div>' +
+        '<div class="hint">Список техники сохранён и не используется. Вернуть парк можно на вкладке «Вводные», карточка «Корма».</div></div>';
+    }
     const list = MTF.ensureMachinery(MTF.state);
     const M = MTF.calcMachinery(P, res);
     const N = P.project.farmsCount || 1;

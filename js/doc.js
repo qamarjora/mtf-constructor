@@ -153,7 +153,7 @@ MTF.docSections = [
 
 **2.4. Расчётная структура стада**
 
-{{structureTable}}
+{{structureTable}}{{feedBaseBlock}}
 `
   },
   {

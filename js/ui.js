@@ -317,6 +317,11 @@ MTF.renderInputs = function (res) {
         ? field('Га на фуражную корову', 'feed.landHaPerCow', 'га')
         : field('Пашня под корма', 'feed.landHa', 'га')) +
       field('Себестоимость га', 'feed.landCostPerHa', '₸/га') +
+      field('Техника и полевые работы', 'feed.machineryMode', '', 'select',
+        [['own', 'Свой парк техники (карточка парка)'], ['complex', 'Выполняет АУП комплекса']]) +
+      (P.feed.machineryMode === 'complex'
+        ? '<div class="hint">Карточка парка и раздел «Машинно-технологический парк» в документе скрыты, потребность в земле остаётся в описании фермы. ' +
+          'Блок ФОТ «Земельный фонд» выключается отдельно (вкладка «Экономика»).</div>' : '') +
       '<div class="hint">При режиме «га на корову» площадь пересчитывается вслед за поголовьем. ' +
       'Это защищает от ситуации, когда база засеяна под полное стадо, а коров вдвое меньше.</div>'
       : '') +
@@ -770,6 +775,7 @@ MTF.renderDocTab = function (res) {
   const m = MTF.docModes.find(x => x.id === mode) || MTF.docModes[MTF.docModes.length - 1];
   const secs = MTF.renderDoc(MTF.state, res);
   const list = MTF.state.docSections.map((s, i) =>
+    (s.id === 'machinery' && MTF.machineryOff && MTF.machineryOff(MTF.state.params)) ? '' :
     '<label><input type="checkbox" data-sec="' + i + '"' + (s.enabled ? ' checked' : '') + '> ' + s.title + '</label>').join('');
   const prev = MTF.docHtml(MTF.state, secs);
 

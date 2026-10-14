@@ -117,7 +117,8 @@
     const lay = mode && mode.sections ? mode : null;
     const appIds = (mode && mode.appendices) || [];
 
-    let list = state.docSections.filter(function (s) { return s.enabled; });
+    const noMachinery = MTF.machineryOff && MTF.machineryOff(state.params);   // парк выполняет АУП комплекса
+    let list = state.docSections.filter(function (s) { return s.enabled && !(noMachinery && s.id === 'machinery'); });
     if (lay) {   // порядок задаёт вид документа, а не порядок в массиве
       const pos = function (id) { const i = lay.sections.indexOf(id); return i < 0 ? 1e6 : i; };
       list = list.map(function (s, i) { return { s: s, i: i }; })
