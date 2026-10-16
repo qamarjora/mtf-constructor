@@ -5,7 +5,8 @@
 - **main:** версия кода 1.3.5 (последний коммит с изменением кода: `4a0b502`). Актуальный коммит смотри в `git log`.
 - **Тесты:** `node tests/v130.test.js` (61 ✓), `node tests/feedlot.test.js` (8 ✓),
   `node tests/switches.test.js` (92 ✓, переключатели земельного фонда и парка техники, проверки ликвидности),
-  `node tests/contractor.test.js` (70 ✓, режим кормов «от подрядчика»).
+  `node tests/contractor.test.js` (70 ✓, режим кормов «от подрядчика»),
+  `node tests/mission.test.js` (49 ✓, подпункт «Миссия и цикл проекта»).
   Раздел 8 «сохранить → открыть» пропускается: не установлен jsdom.
 - **Раздел 19 «Персонал и оплата труда»** проверен в браузере.
 
@@ -114,6 +115,7 @@ tests/v130.test.js    проверки версии 1.3.x
 tests/feedlot.test.js проверки откорма
 tests/switches.test.js проверки переключателей (земельный фонд, парк техники)
 tests/contractor.test.js проверки режима кормов «от подрядчика»
+tests/mission.test.js проверки подпункта «Миссия и цикл проекта»
 ```
 
 Загрузка через обычные `<script>` без модулей — чтобы работало по `file://`
@@ -257,6 +259,15 @@ tests/contractor.test.js проверки режима кормов «от по�
 `doc-layout.js`. Раздел «Персонал и оплата труда» (`staff`, № 19 в базовой
 нумерации) включён в `passport`, `bizplan`, `investment`.
 
+**Подпункт «Миссия и цикл проекта»** (1.2 в разделе «Концепция»): виден в `passport`, `bizplan`,
+`investment` и `custom`, в `estimate` и `technical` его нет (там документ побитово прежний), откорм
+не затрагивается (свой раздел `fl_concept`). Режимы задаёт `MTF.missionModes`, условие — `MTF.missionOn`
+(`doc-layout.js`). Текст и число ферм со склонением собираются в коде (`MTF.missionText`, `MTF.pluralRu` в `doc.js`),
+без вложенных плейсхолдеров. Шаблон «Концепции» содержит `{{missionBlock}}` и плейсхолдеры номеров
+`{{conceptN2}}`–`{{conceptN4}}` (2, 3, 4 без подпункта и 3, 4, 5 с ним). Известное поведение: проект, где
+«Концепцию» правили через «Править шаблоны» (`edited: true`), остаётся со своим текстом и подпункта не получает.
+Молочный завод описан только в концепции, его экономика в расчёт не входит.
+
 Разделы нумеруются автоматически при рендере — если раздел выключен, номера
 пересчитываются, включая подпункты внутри текста.
 
@@ -281,6 +292,7 @@ tests/contractor.test.js проверки режима кормов «от по�
 | Валюты и курсы | `config.js`, `MTF.currencies` |
 | Текст документа | `doc.js`, `MTF.docSections` |
 | Режимы документа | `doc.js`, `MTF.docModes` |
+| Подпункт «Миссия и цикл проекта» | `doc.js`, `MTF.missionText`, `MTF.pluralRu`, шаблон `concept`; `doc-layout.js`, `MTF.missionModes`, `MTF.missionOn` |
 | Раскладка и таблицы документа | `doc-layout.js`, `MTF.docTables`, `MTF.renderDoc` |
 | Оформление интерфейса | `css/style.css` |
 | Оформление печати | `export.js`, `MTF.printCss` |
@@ -290,7 +302,7 @@ tests/contractor.test.js проверки режима кормов «от по�
 ## Правила работы с кодом
 
 - Проверять синтаксис: `node --check js/*.js`
-- Прогонять `node tests/v130.test.js`, `node tests/feedlot.test.js`, `node tests/switches.test.js` и `node tests/contractor.test.js` перед коммитом
+- Прогонять `node tests/v130.test.js`, `node tests/feedlot.test.js`, `node tests/switches.test.js`, `node tests/contractor.test.js` и `node tests/mission.test.js` перед коммитом
 - Не ломать обратную совместимость сохранённых `.json` — в `MTF.load`
   состояние сливается с дефолтами, новые поля подставляются
 - `MTF.render` обёрнут в try/catch: при ошибке показывает карточку с текстом,
