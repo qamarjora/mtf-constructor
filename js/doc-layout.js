@@ -35,6 +35,7 @@
     operator:       { title: 'Роль Оператора', numbered: true },
     limits:         { title: 'Ограничения и обязательства инвестора', numbered: true },
     risks:          { title: 'Риски и их снижение', numbered: true },
+    riskparties:    { title: 'Риски сторон', numbered: true },
     machinery:      { title: 'Машинно-технологический парк', numbered: true },
     prep:           { title: 'Подготовительный этап', numbered: true },
     utilities:      { title: 'Инженерное обеспечение', numbered: true },
@@ -61,7 +62,7 @@
     },
     bizplan: {
       sections: ['concept', 'structure', 'farm', 'herddyn', 'estimate', 'equipment', 'staff', 'stages',
-        'finmodel', 'renewal', 'subsidycompare', 'consolidated', 'operator', 'risks', 'disclaimer',
+        'finmodel', 'renewal', 'subsidycompare', 'consolidated', 'operator', 'risks', 'riskparties', 'disclaimer',
         'machinery', 'utilities', 'prep'],
       appendices: ['machinery', 'utilities', 'prep']
     },
@@ -70,7 +71,7 @@
        модель», консолидация заменена колонками «1 ферма | N ферм» в самих таблицах. */
     investment: {
       sections: ['summary', 'concept', 'farm', 'herddyn', 'estimate', 'deal', 'finmodel',
-        'subsidycompare', 'operator', 'stages', 'risks', 'limits', 'disclaimer',
+        'subsidycompare', 'operator', 'stages', 'risks', 'riskparties', 'limits', 'disclaimer',
         'equipment', 'machinery', 'utilities', 'staff', 'prep'],
       appendices: ['equipment', 'machinery', 'utilities', 'staff', 'prep']
     }
@@ -87,7 +88,7 @@
   /* Общий порядок: для «Своего набора» и для списка галочек на вкладке «Документ» */
   MTF.docMaster = {
     sections: ['summary', 'concept', 'structure', 'farm', 'herddyn', 'estimate', 'deal', 'finmodel', 'renewal',
-      'consolidated', 'subsidycompare', 'operator', 'stages', 'risks', 'limits', 'disclaimer',
+      'consolidated', 'subsidycompare', 'operator', 'stages', 'risks', 'riskparties', 'limits', 'disclaimer',
       'equipment', 'machinery', 'utilities', 'staff', 'prep'],
     appendices: ['equipment', 'machinery', 'utilities', 'staff', 'prep']
   };
