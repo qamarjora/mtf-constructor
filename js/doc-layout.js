@@ -76,6 +76,14 @@
     }
   };
 
+  /* Подпункт «Миссия и цикл проекта» в «Концепции» (текст — MTF.missionText в doc.js): только в этих видах
+     документа и только для МТФ; в смете и техническом описании его нет. Откорм использует свой раздел fl_concept. */
+  MTF.missionModes = ['passport', 'bizplan', 'investment', 'custom'];
+  MTF.missionOn = function (state) {
+    return MTF.missionModes.indexOf(state.docMode) >= 0 &&
+      !(state.params && state.params.project && state.params.project.type === 'feedlot');
+  };
+
   /* Общий порядок: для «Своего набора» и для списка галочек на вкладке «Документ» */
   MTF.docMaster = {
     sections: ['summary', 'concept', 'structure', 'farm', 'herddyn', 'estimate', 'deal', 'finmodel', 'renewal',
@@ -231,6 +239,11 @@
     let iy = res.herd.findIndex(function (y) { return y.cows >= tgt * 0.99; });
     if (iy < 0) iy = res.herd.length - 1;
     const prepIn = MTF.prepModeOf && MTF.prepModeOf(p) === 'in_project';
+
+    // «Миссия и цикл проекта»: блок и номера следующих подпунктов (2, 3, 4 → 3, 4, 5 при наличии блока)
+    const mission = MTF.missionOn(state);
+    t.missionBlock = mission ? '\n\n' + MTF.missionText(N) : '';
+    t.conceptN2 = mission ? 3 : 2; t.conceptN3 = mission ? 4 : 3; t.conceptN4 = mission ? 5 : 4;
 
     // вознаграждение Оператора в деньгах: на ферму и на проект
     const fee = res.pnl[iy].operatorFee || 0;
