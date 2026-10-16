@@ -126,7 +126,7 @@ MTF.calcHerd = function (p) {
 
   function newYear() {
     return {
-      milkLiters: 0, calvings: 0, calvesBorn: 0,
+      milkMonthly: [], milkLiters: 0, calvings: 0, calvesBorn: 0,
       calvesSoldM: 0, calvesSoldF: 0, cullSold: 0,
       bullsSold: 0, bullWeightKg: 0,
       heifersPurchased: 0, surplusSold: 0,
@@ -257,6 +257,7 @@ MTF.calcHerd = function (p) {
     const fcK = (P.firstCalfYield || 100) / 100;
     const effCows = (cows - firstLact) + firstLact * fcK;
     acc.milkLiters += effCows * yieldYear / 12;
+    acc.milkMonthly.push(effCows * yieldYear / 12);   // литры по месяцам года (нужны мерам с monthFrom)
 
     // ----- Контроль скотомест -----
     const sumArr = function (arr, from, to) {
@@ -304,6 +305,7 @@ MTF.calcHerd = function (p) {
         calves: calfTotal, heifers: heiferTotal, bulls: bullTotal,
         total: cows + calfTotal + heiferTotal + bullTotal,
         milkLiters: acc.milkLiters,
+        milkMonthly: acc.milkMonthly,   // 12 значений, л; сумма равна milkLiters
         milkPerCow: cows > 0 ? acc.milkLiters / cows : 0,
         calvesSold: acc.calvesSoldM + acc.calvesSoldF,
         surplusSold: acc.surplusSold,
