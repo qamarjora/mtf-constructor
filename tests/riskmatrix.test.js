@@ -137,5 +137,34 @@ console.log('9. Откорм не затронут');
 ok((M.feedlot && M.feedlot.docSections ? M.feedlot.docSections : []).every(s => s.id !== 'riskparties' && s.body.indexOf('riskLossTable') < 0), 'разделы откорма (fl_*) раздела «Риски сторон» не содержат');
 ok(M.docSections.some(s => s.id === 'riskparties') && M.docSections.find(s => s.id === 'riskparties').enabled === true, 'в наборе разделов МТФ раздел есть и включён по умолчанию (виден в «Своём наборе»)');
 
+console.log('10. Карточка ввода на вкладке «Экономика»');
+const cs = M.initState(); M.state = cs;
+const card0 = M.renderRiskCard();
+ok(count(card0, 'data-rkl="') === 35 && count(card0, 'data-rkd="') === 28, 'поля ввода: 35 в таблице 1 (без диагонали) и 28 в таблице 2');
+ok(count(card0, 'title="Событие самой стороны">—</td>') === 7, 'на диагонали семь прочерков без поля ввода');
+ok(/Заполнено 0 из 63/.test(card0), 'счётчик заполнения: 0 из 63');
+ok(M.renderEcon(M.runModel(cs)).indexOf('<h3>Риски сторон</h3>') >= 0, 'карточка выводится на вкладке «Экономика»');
+ok(card0.indexOf('data-rkl="e_investor|investor"') < 0 && card0.indexOf('data-rkl="e_credit|investor"') < 0 && card0.indexOf('data-rkl="e_land|uk"') < 0, 'поля для диагональных ячеек нет (в том числе «дефолт по кредиту» × инвестор и «потеря аренды» × УК)');
+
+console.log('11. Запись значений');
+const ws = M.initState();
+ok(M.setRiskLoss(ws, 'e_uk', 'lender', '  Потеря обеспечения ') === true && ws.riskMatrix.loss['e_uk|lender'] === 'Потеря обеспечения', 'значение таблицы 1 записывается, пробелы по краям обрезаются');
+ok(M.setRiskDetail(ws, 'e_land', 'cause', 'Расторжение') === true && ws.riskMatrix.detail.e_land.cause === 'Расторжение', 'значение таблицы 2 записывается');
+ok(M.setRiskLoss(ws, 'e_investor', 'investor', 'x') === false && !('e_investor|investor' in ws.riskMatrix.loss), 'диагональная ячейка не записывается');
+ok(M.setRiskLoss(ws, 'нет', 'lender', 'x') === false && M.setRiskLoss(ws, 'e_uk', 'нет', 'x') === false && M.setRiskDetail(ws, 'e_uk', 'нет', 'x') === false && M.setRiskDetail(ws, 'нет', 'cause', 'x') === false, 'неизвестные идентификаторы игнорируются');
+M.setRiskLoss(ws, 'e_uk', 'lender', '   ');
+ok(!('e_uk|lender' in ws.riskMatrix.loss), 'пустое значение удаляет ячейку');
+M.setRiskDetail(ws, 'e_land', 'cause', '');
+ok(!('e_land' in ws.riskMatrix.detail), 'последняя очищенная ячейка события убирает запись события');
+const fresh = M.initState(); delete fresh.riskMatrix;
+M.setRiskLoss(fresh, 'e_uk', 'lender', ''); M.setRiskDetail(fresh, 'e_uk', 'cause', '');
+ok(fresh.riskMatrix === undefined, 'очистка пустого значения в проекте без поля поле не создаёт');
+M.setRiskLoss(fresh, 'e_uk', 'lender', 'Потеря');
+ok(fresh.riskMatrix && fresh.riskMatrix.loss['e_uk|lender'] === 'Потеря', 'первое непустое значение создаёт поле');
+const cs2 = M.initState(); M.setRiskLoss(cs2, 'e_uk', 'lender', '<i>&"x"'); M.setRiskDetail(cs2, 'e_uk', 'cause', 'причина'); M.state = cs2;
+const card1 = M.renderRiskCard();
+ok(/Заполнено 2 из 63/.test(card1) && card1.indexOf('&lt;i&gt;&amp;&quot;x&quot;') >= 0 && card1.indexOf('<i>') < 0, 'карточка показывает значения (экранированные) и счётчик 2 из 63');
+ok(count(risk(render('investment', st => { st.riskMatrix = c(cs2.riskMatrix); })).body, MARK) === 61, 'введённые в карточке значения уходят в документ вместо пометок (61)');
+
 console.log(fails ? '\nЕсть ошибки: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);

@@ -129,3 +129,81 @@ MTF.ensureRisks = function (state) {
     return st;
   };
 })();
+
+/* ---------- Запись значений (общая для карточки и тестов) ----------
+   Пустое значение удаляет ключ; поле riskMatrix создаётся только при первом непустом вводе.
+   Диагональные ячейки таблицы 1 и неизвестные идентификаторы игнорируются. */
+MTF.setRiskLoss = function (state, eventId, partyId, value) {
+  const e = MTF.riskEvents.find(x => x.id === eventId), p = MTF.riskParties.find(x => x.id === partyId);
+  if (!e || !p || e.owner === p.id) return false;
+  const v = String(value == null ? '' : value).trim(), k = eventId + '|' + partyId;
+  if (v === '') { if (state.riskMatrix && state.riskMatrix.loss) delete state.riskMatrix.loss[k]; return true; }
+  MTF.ensureRisks(state).loss[k] = v;
+  return true;
+};
+MTF.setRiskDetail = function (state, eventId, key, value) {
+  if (!MTF.riskEvents.some(x => x.id === eventId) || !MTF.riskDetailFields.some(f => f.key === key)) return false;
+  const v = String(value == null ? '' : value).trim();
+  if (v === '') {
+    const d = state.riskMatrix && state.riskMatrix.detail && state.riskMatrix.detail[eventId];
+    if (d) { delete d[key]; if (!Object.keys(d).length) delete state.riskMatrix.detail[eventId]; }
+    return true;
+  }
+  const rm = MTF.ensureRisks(state);
+  (rm.detail[eventId] = rm.detail[eventId] || {})[key] = v;
+  return true;
+};
+
+/* ---------- Карточка на вкладке «Экономика» ---------- */
+(function () {
+  if (!MTF.renderEcon) return;
+
+  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  MTF.renderRiskCard = function () {
+    const S = MTF.state, rm = S.riskMatrix || {}, loss = rm.loss || {}, detail = rm.detail || {};
+    const filled = Object.keys(loss).length +
+      Object.keys(detail).reduce((a, k) => a + Object.keys(detail[k] || {}).length, 0);
+    const total = MTF.riskEvents.length * (MTF.riskParties.length - 1) + MTF.riskEvents.length * MTF.riskDetailFields.length;
+
+    const ta = (attr, val) => '<textarea class="cmt" rows="2" ' + attr + ' style="margin:0;min-width:120px">' + esc(val) + '</textarea>';
+
+    const rows1 = MTF.riskEvents.map(e =>
+      '<tr><td style="min-width:160px">' + esc(e.name) + '</td>' + MTF.riskParties.map(p =>
+        p.id === e.owner
+          ? '<td class="n" title="Событие самой стороны">—</td>'
+          : '<td>' + ta('data-rkl="' + e.id + '|' + p.id + '"', loss[e.id + '|' + p.id]) + '</td>').join('') + '</tr>').join('');
+
+    const rows2 = MTF.riskEvents.map(e =>
+      '<tr><td style="min-width:160px">' + esc(e.name) + '</td>' + MTF.riskDetailFields.map(f =>
+        '<td>' + ta('data-rkd="' + e.id + '|' + f.key + '"', (detail[e.id] || {})[f.key]) + '</td>').join('') + '</tr>').join('');
+
+    return '<div class="card" style="margin-top:14px"><h3>Риски сторон</h3>' +
+      '<div class="hint" style="margin-top:0">Данные для раздела документа «Риски сторон» (бизнес-план, инвестиционное предложение, «Свой набор»). ' +
+      'Пустые ячейки выводятся в документе как [УТОЧНИТЬ], заполненные — текстом. Заполнено ' + filled + ' из ' + total + '. ' +
+      'Прочерк — событие самой стороны, вводить не нужно.</div>' +
+      '<h4>Что теряет сторона при наступлении события</h4>' +
+      '<div class="tw"><table><thead><tr><th>Событие</th>' + MTF.riskParties.map(p => '<th>' + esc(p.name) + '</th>').join('') +
+      '</tr></thead><tbody>' + rows1 + '</tbody></table></div>' +
+      '<h4>Причины, потери, защита и ответственные</h4>' +
+      '<div class="tw"><table><thead><tr><th>Событие</th>' + MTF.riskDetailFields.map(f => '<th>' + esc(f.label) + '</th>').join('') +
+      '</tr></thead><tbody>' + rows2 + '</tbody></table></div>' +
+      '<div class="hint">Счётчик «УТОЧНИТЬ» над документом считает каждую пустую ячейку (до ' + total + ' штук), поэтому при незаполненных таблицах он большой.</div></div>';
+  };
+
+  const origEcon = MTF.renderEcon;
+  MTF.renderEcon = function (res) {
+    return origEcon(res) + MTF.renderRiskCard(res);
+  };
+
+  const origBind = MTF.bind;
+  MTF.bind = function () {
+    origBind();
+    const S = MTF.state, upd = () => { MTF.save(); MTF.render(); };
+    const on = (sel, fn) => document.querySelectorAll(sel).forEach(el =>
+      el.onchange = () => { fn(el); upd(); });
+    on('[data-rkl]', el => { const k = el.dataset.rkl.split('|'); MTF.setRiskLoss(S, k[0], k[1], el.value); });
+    on('[data-rkd]', el => { const k = el.dataset.rkd.split('|'); MTF.setRiskDetail(S, k[0], k[1], el.value); });
+  };
+})();
