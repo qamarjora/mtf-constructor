@@ -166,5 +166,10 @@ const card1 = M.renderRiskCard();
 ok(/Заполнено 2 из 63/.test(card1) && card1.indexOf('&lt;i&gt;&amp;&quot;x&quot;') >= 0 && card1.indexOf('<i>') < 0, 'карточка показывает значения (экранированные) и счётчик 2 из 63');
 ok(count(risk(render('investment', st => { st.riskMatrix = c(cs2.riskMatrix); })).body, MARK) === 61, 'введённые в карточке значения уходят в документ вместо пометок (61)');
 
+console.log('12. Подсветка пометок в экспорте (Word и PDF)');
+const pcss = M.printCss();
+ok(/mark\.todo\{background:#fff1a8;color:inherit;padding:0 2pt\}/.test(pcss), 'в печатном стиле есть подсветка mark.todo (как на экране)');
+ok(pcss.split('\n').filter(l => l.indexOf('mark.todo') >= 0).length === 1, 'правило одно');
+
 console.log(fails ? '\nЕсть ошибки: ' + fails : '\nВсе проверки пройдены');
 process.exit(fails ? 1 : 0);

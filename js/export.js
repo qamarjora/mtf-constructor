@@ -46,6 +46,7 @@ table.dt td{padding:5pt 8pt;border-bottom:.5pt solid #D8D8D2}
 table.dt td.r{text-align:right}
 table.dt td.n{font-variant-numeric:tabular-nums}
 table.dt tbody tr:nth-child(even){background:#F6F6F2}
+mark.todo{background:#fff1a8;color:inherit;padding:0 2pt}
 `;
 };
 
