@@ -518,7 +518,7 @@ MTF.docTables = function (state, res) {
            года). Нулевая ставка ничего не приносила и падение объяснить
            не может — такие меры не перечисляем. Названия оставляем как есть:
            в них есть аббревиатуры, и нижний регистр давал «мтф». */
-        const ended = state.subsidies.filter(s => s.enabled && s.yearTo === i && s.value > 0);
+        const ended = state.subsidies.filter(s => s.enabled && MTF.subsidyLastYear(s, p.project.horizon) === i && s.value > 0);
         const capexEnded = ended.filter(s => s.type === 'capex_pct');
         const names = list => list.map(s => s.name).join('; ');
         const cause = capexEnded.length
@@ -543,11 +543,11 @@ MTF.docTables = function (state, res) {
       if (!on.length) return '<p><i>Меры государственной поддержки в расчёте не учитывались.</i></p>';
       const tbl = dt(['Мера поддержки', 'Ставка', 'Период'],
         on.map(s => [s.name, f.num(s.value, 1) + ' ' + s.unit,
-          'годы ' + s.yearFrom + '–' + s.yearTo]));
+          MTF.subsidyPeriodText(s)]));
       /* Меры могут заканчиваться раньше конца горизонта — тогда последние
          годы посчитаны без поддержки. Это допущение, а не пропуск данных,
          и в документе для кредитора его нужно назвать вслух. */
-      const last = Math.max.apply(null, on.map(s => s.yearTo));
+      const last = Math.max.apply(null, on.map(s => MTF.subsidyLastYear(s, p.project.horizon)));
       if (last >= p.project.horizon) return tbl;
       const tail = p.project.horizon - last;
       return tbl + '\n<p><i>Меры поддержки заданы по ' + last + '-й год проекта (' +

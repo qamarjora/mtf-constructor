@@ -250,12 +250,12 @@ MTF.feedlot = MTF.feedlot || {};
   FL.calcSubsidies = function (p, herdYears, capex, subsidies) {
     return herdYears.map((y, i) => {
       const yr = i + 1, detail = {};
-      subsidies.filter(s => s.enabled && yr >= s.yearFrom && yr <= s.yearTo).forEach(s => {
+      subsidies.filter(s => MTF.subsidyActive(s, yr)).forEach(s => {
         let v = 0;
         if (s.type === 'per_head') v = y.sold * s.value;
         else if (s.type === 'per_kg') v = y.liveKgSold * s.value / 1000;
         else if (s.type === 'capex_pct') {
-          const span = s.yearTo - s.yearFrom + 1;
+          const span = MTF.subsidyLastYear(s, p.project.horizon) - s.yearFrom + 1;
           const base = s.base === 'all' ? capex.total : (capex.groups[s.base] || 0);
           v = base * s.value / 100 / span;
         } else if (s.type === 'fixed_year') v = s.value;

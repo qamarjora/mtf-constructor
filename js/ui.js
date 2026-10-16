@@ -618,7 +618,13 @@ MTF.renderSubsidies = function (res) {
     '<input type="checkbox" data-sub="' + i + '"' + (s.enabled ? ' checked' : '') + '>' +
     '<div><div class="nm">' + s.name + '<span class="tag ' + s.status + '">' +
     ({ check: 'проверить', confirmed: 'подтверждено', draft: 'черновик' })[s.status] + '</span></div>' +
-    '<div class="meta">Условие: ' + (s.condition || '—') + '<br>Период: годы ' + s.yearFrom + '–' + s.yearTo + '</div>' +
+    '<div class="meta">Условие: ' + (s.condition || '—') + '<br>Период: ' + MTF.subsidyPeriodText(s) + '</div>' +
+    '<div class="meta" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0">' +
+    'Годы с <input type="number" data-subyf="' + i + '" value="' + s.yearFrom + '" step="1" min="1" style="width:52px"> ' +
+    'по <input type="number" data-subyt="' + i + '" value="' + s.yearTo + '" step="1" min="0" style="width:52px"> ' +
+    '<span>(0 — до конца горизонта)</span>' +
+    (s.type === 'per_liter' ? ' с месяца <input type="number" data-submf="' + i + '" value="' + MTF.subsidyMonthFrom(s) + '" step="1" min="1" max="12" style="width:52px">' : '') +
+    '</div>' +
     '<textarea class="cmt" rows="1" data-cmt="' + i + '" placeholder="Комментарий проверяющего">' + (s.comment || '') + '</textarea></div>' +
     '<div class="rate"><input type="number" data-subval="' + i + '" value="' + s.value + '" step="any">' +
     '<span style="font-size:11px;color:var(--ink-3)">' + s.unit + '</span>' +
@@ -958,6 +964,12 @@ MTF.bind = function () {
   };
   bindArr('[data-subval]', el => S.subsidies[el.dataset.subval].value = parseFloat(el.value) || 0);
   bindArr('[data-sub]', el => S.subsidies[el.dataset.sub].enabled = el.checked);
+  bindArr('[data-subyf]', el => S.subsidies[el.dataset.subyf].yearFrom = Math.max(1, Math.round(parseFloat(el.value)) || 1));
+  bindArr('[data-subyt]', el => S.subsidies[el.dataset.subyt].yearTo = Math.max(0, Math.round(parseFloat(el.value)) || 0));
+  bindArr('[data-submf]', el => {
+    const s = S.subsidies[el.dataset.submf], m = Math.max(1, Math.min(12, Math.round(parseFloat(el.value)) || 1));
+    if (m > 1) s.monthFrom = m; else delete s.monthFrom;   // 1 = с начала года, поле не храним
+  });
   bindArr('[data-sec]', el => {
     S.docSections[el.dataset.sec].enabled = el.checked;
     S.docMode = 'custom';

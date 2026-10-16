@@ -251,16 +251,22 @@ MTF.calcSubsidies = function (p, herdYears, capex, subsidies) {
     const yr = i + 1;
     const detail = {};
 
-    subsidies.filter(s => s.enabled && yr >= s.yearFrom && yr <= s.yearTo).forEach(s => {
+    subsidies.filter(s => MTF.subsidyActive(s, yr)).forEach(s => {
       let v = 0;
-      if (s.type === 'per_liter') v = y.milkLiters * s.value / 1000;
-      else if (s.type === 'per_head') {
+      if (s.type === 'per_liter') {
+        // monthFrom > 1: в год начала литры только с этого месяца; дальше — весь год
+        const mf = MTF.subsidyMonthFrom(s);
+        const litres = (mf > 1 && yr === s.yearFrom && y.milkMonthly)
+          ? y.milkMonthly.slice(mf - 1).reduce((a, b) => a + b, 0)
+          : y.milkLiters;
+        v = litres * s.value / 1000;
+      } else if (s.type === 'per_head') {
         if (s.id === 'breeding_heifers') {
           const heads = (i === 0 ? p.herd.startHeifers : 0) + y.heifersPurchased;
           v = heads * s.value;
         } else v = y.cows * s.value;
       } else if (s.type === 'capex_pct') {
-        const span = s.yearTo - s.yearFrom + 1;
+        const span = MTF.subsidyLastYear(s, p.project.horizon) - s.yearFrom + 1;
         const base = s.base === 'all' ? capex.total - (capex.prepIncluded || 0) : (capex.groups[s.base] || 0);
         v = base * s.value / 100 / span;
       } else if (s.type === 'fixed_year') v = s.value;

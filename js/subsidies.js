@@ -11,7 +11,9 @@
      'fixed_year'  — фиксированная сумма в год, тыс. ₸
 
    base (для capex_pct): build | equip | herd | prep | all
-   yearFrom / yearTo — годы действия (1 = первый год проекта)
+   yearFrom / yearTo — годы действия (1 = первый год проекта); yearTo = 0 — до конца горизонта
+   monthFrom — только для per_liter: мера платится с этого месяца года yearFrom (1–12), литры считаются
+               только за месяцы от monthFrom; в следующие годы — за весь год. Нет поля — с начала года
    conflictsWith — id мер, с которыми не совмещается
    status — 'confirmed' | 'check' | 'draft'
    ============================================================ */
@@ -142,6 +144,26 @@ MTF.subsidies = [
     comment: 'Если ставка АКК уже льготная (6%), удешевление может не применяться'
   }
 ];
+
+/* ---------- Годы действия меры ----------
+   Единое место, где yearTo = 0 читается как «до конца горизонта» (расчёт, документ, интерфейс).
+   Старые меры (yearTo > 0) работают как прежде. */
+MTF.subsidyOpenEnded = function (s) { return s.yearTo === 0; };
+MTF.subsidyLastYear = function (s, horizon) { return s.yearTo === 0 ? horizon : s.yearTo; };
+MTF.subsidyActive = function (s, yr) {
+  return !!s.enabled && yr >= s.yearFrom && (s.yearTo === 0 || yr <= s.yearTo);
+};
+MTF.subsidyMonthFrom = function (s) {
+  const m = Math.round(Number(s.monthFrom));
+  return m > 1 ? Math.min(12, m) : 1;
+};
+/* Текст периода: «годы 1–10» как раньше; для открытой меры «годы 1–до конца горизонта», с началом
+   не с первого месяца — «, с 8-го месяца» */
+MTF.subsidyPeriodText = function (s) {
+  const mf = MTF.subsidyMonthFrom(s);
+  return 'годы ' + s.yearFrom + '–' + (s.yearTo === 0 ? 'до конца горизонта' : s.yearTo) +
+    (s.type === 'per_liter' && mf > 1 ? ', с ' + mf + '-го месяца года ' + s.yearFrom : '');
+};
 
 /* Проверка конфликтов между включёнными мерами */
 MTF.checkSubsidyConflicts = function (list) {
