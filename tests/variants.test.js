@@ -200,5 +200,43 @@ console.log('5. Проценты льготного периода (finance.grac
   ok(docOf(project(), 'bizplan').indexOf('в т.ч. в долг') < 0, 'документ по умолчанию без них');
 }
 
+console.log('6. Результат оператора');
+{
+  const st = project(s => { s.params.staff.payer = 'operator'; s.opexItems.push({ id: 'o_tax', name: 'Налоги', base: 'revenue', value: 10 }); });
+  const res = run(st), before = strip(res.pnl) + strip(res.cf) + strip(res.metrics);
+  const o = M.calcOperatorResult(st, res), N = st.params.project.farmsCount;
+  ok(strip(res.pnl) + strip(res.cf) + strip(res.metrics) === before, 'расчёт ничего в res не меняет');
+  const i = 4, k = Math.pow(1 + st.params.prices.costInflation / 100, i);
+  const pr = M.calcPayroll(st.params, st.staff, res.herd[i].cows);
+  ok(near(o.rows[i].fee, res.pnl[i].operatorFee) && near(o.rows[i].payroll, pr.gross * k, 1e-6), 'operator: ФОТ оператора = весь ФОТ × рост затрат, вознаграждение из P&L');
+  ok(near(o.rows[i].result, o.rows[i].fee - o.rows[i].payroll), 'результат = вознаграждение минус ФОТ');
+  ok(near(o.rows[o.rows.length - 1].cumulative, o.rows.reduce((a, r) => a + r.result, 0), 1e-6), 'накопленно = сумма результатов');
+  const tgt = res.herd.meta.target;
+  ok(res.herd[o.capIdx].cows >= tgt * 0.99 && (o.capIdx === 0 || res.herd[o.capIdx - 1].cows < tgt * 0.99), 'год мощности = первый год с 99% целевого поголовья (' + o.capYear + ')');
+  ok(near(o.breakEven, o.rows[o.capIdx].payroll / o.rows[o.capIdx].revenue * 100, 1e-9), 'безубыточная доля = ФОТ оператора / выручка года');
+  const tuned = run(project(s => { s.params.staff.payer = 'operator'; s.params.finance.operatorFeeValue = o.breakEven; }));
+  const ot = M.calcOperatorResult(M.state, tuned);
+  ok(near(ot.rows[ot.capIdx].result, 0, 1e-6), 'при безубыточной доле результат в год мощности равен нулю');
+  ok(o.breakEvenMin <= o.breakEven + 1e-9 && o.breakEven <= o.breakEvenMax + 1e-9 && o.breakEvenMin > 0, 'диапазон доли с мощности включает долю года мощности');
+
+  const fo = project(s => { s.params.staff.payer = 'farm_only'; }), rf = run(fo), of = M.calcOperatorResult(fo, rf);
+  const prf = M.calcPayroll(fo.params, fo.staff, rf.herd[i].cows);
+  ok(near(of.rows[i].payroll, prf.blocks.find(b => b.id === 'complex').gross * k, 1e-6), 'farm_only: оператор платит только АУП комплекса');
+  const ff = project(), rff = run(ff), off = M.calcOperatorResult(ff, rff);
+  ok(off.rows.every(r => r.payroll === 0 && near(r.result, r.fee)), 'farm: оператор ничего не платит, результат = вознаграждение');
+
+  const h = M.renderFin(res);
+  ok(h.indexOf('<h3>Результат оператора</h3>') >= 0 && h.indexOf('<h3>Результат оператора</h3>') < h.indexOf('<h3>График погашения</h3>'), 'карточка на вкладке «Финансирование» перед графиком погашения');
+  ok(h.indexOf('Безубыточная доля оператора') >= 0 && h.indexOf('вне EBITDA, NPV и IRR фермы') >= 0, 'есть безубыточная доля и пометка «вне EBITDA, NPV и IRR»');
+  const w = M.renderFin(run(project(s => { s.params.staff.payer = 'operator'; s.params.finance.operatorFeeMode = 'ebitda'; })));
+  ok(w.indexOf('не в % от выручки') >= 0, 'при другой базе вознаграждения предупреждение в карточке');
+  ok(M.renderFin(run(project())).indexOf('<h3>Результат оператора</h3>') >= 0, 'карточка есть и у проекта по умолчанию');
+  const fl = project(s => { s.params.project.type = 'feedlot'; });
+  let hf; try { hf = M.renderFin(run(fl)); } catch (e) { hf = 'ERR'; }
+  ok(hf.indexOf('Результат оператора') < 0, 'для откорма карточки нет');
+  ['estimate', 'technical', 'passport', 'bizplan', 'investment', 'custom'].forEach(mode =>
+    ok(docOf(project(s => { s.params.staff.payer = 'operator'; }), mode).indexOf('Результат оператора') < 0, 'документ «' + mode + '»: результата оператора нет'));
+}
+
 console.log(fails ? '\nОШИБОК: ' + fails : '\nвсе проверки пройдены');
 process.exit(fails ? 1 : 0);
