@@ -26,10 +26,41 @@ MTF.calcFunding = function (p, capex, subsidies) {
   };
 };
 
+/* Проценты льготных лет (finance.graceInterest): 'pay' — платятся (по умолчанию, как всегда),
+   'capitalize' — прибавляются к долгу. Поле читается только так, у проекта без него и у откорма — 'pay'. */
+MTF.graceCapitalized = function (p) {
+  if (p && p.project && p.project.type === 'feedlot') return false;
+  return !!(p && p.finance && p.finance.graceInterest === 'capitalize' && p.finance.graceYears > 0);
+};
+
 MTF.calcDebtSchedule = function (p, funding) {
   const f = p.finance, n = p.project.horizon;
   const rate = funding.effectiveRate / 100;
   const repay = Math.max(1, f.termYears - f.graceYears);
+  /* capitalize: в льготные годы платежа нет, проценты на остаток прибавляются к долгу; после льготы тело делится
+     на оставшиеся годы поровну, проценты считаются на уменьшающийся остаток. Проценты начисляются на весь заём
+     с 1-го года, как и в обычном графике (поэтапная выборка по графику капзатрат не учитывается). */
+  if (MTF.graceCapitalized(p)) {
+    let bal = funding.loanTotal, per = null;
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const open = bal, interest = open * rate;
+      let principal = 0, payment = 0, capitalized = 0;
+      if (i < f.graceYears) { capitalized = interest; bal = open + interest; }
+      else {
+        if (per === null) per = open / repay;
+        principal = Math.min(open, per);
+        payment = interest + principal;
+        bal = open - principal;
+      }
+      out.push({
+        idx: i, year: p.project.startYear + i,
+        opening: open, interest: interest, capitalized: capitalized, principal: principal,
+        payment: payment, closing: bal
+      });
+    }
+    return out;
+  }
   const per = funding.loanTotal / repay;
   let bal = funding.loanTotal;
   const rows = [];

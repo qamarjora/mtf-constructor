@@ -533,7 +533,12 @@ MTF.docTables = function (state, res) {
       }
       return notes.length ? tbl + '\n' + notes.join('\n') : tbl;
     })(),
-    debtTable: dt(['Год', 'Остаток', 'Проценты', 'Осн. долг', 'Платёж', 'DSCR'],
+    debtTable: MTF.graceCapitalized(p)
+      ? dt(['Год', 'Остаток', 'Проценты', 'в т.ч. в долг', 'Осн. долг', 'Платёж', 'DSCR'],
+        res.debt.map((d, i) => [d.year, f.num(d.opening), f.num(d.interest), f.num(d.capitalized), f.num(d.principal),
+          f.num(d.payment), m.dscr[i].value !== null ? m.dscr[i].value.toFixed(2) : '—'])) +
+        '\n<p><i>В льготный период платежей нет: начисленные проценты прибавляются к долгу, основной долг делится на оставшиеся годы срока. Проценты начисляются на весь заём с первого года.</i></p>'
+      : dt(['Год', 'Остаток', 'Проценты', 'Осн. долг', 'Платёж', 'DSCR'],
       res.debt.map((d, i) => [d.year, f.num(d.opening), f.num(d.interest), f.num(d.principal),
         f.num(d.payment), m.dscr[i].value !== null ? m.dscr[i].value.toFixed(2) : '—'])),
     exitTable: dt(['Год выхода', 'MOIC', 'IRR на вложения', 'Стоимость доли, тыс. ₸'],

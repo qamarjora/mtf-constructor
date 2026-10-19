@@ -677,9 +677,11 @@ MTF.renderFin = function (res) {
           ' — просадка приходится на пусконаладочный год.'
         : '') + '</div>' : '';
 
+  const capOn = MTF.graceCapitalized(P);
   const debtRows = res.debt.map((d, i) =>
     '<tr><td class="n">' + d.year + '</td><td class="n">' + f.num(d.opening) + '</td>' +
-    '<td class="n">' + f.num(d.interest) + '</td><td class="n">' + f.num(d.principal) + '</td>' +
+    '<td class="n">' + f.num(d.interest) + '</td>' + (capOn ? '<td class="n">' + f.num(d.capitalized) + '</td>' : '') +
+    '<td class="n">' + f.num(d.principal) + '</td>' +
     '<td class="n"><b>' + f.num(d.payment) + '</b></td><td class="n">' + f.num(d.closing) + '</td>' +
     '<td class="n">' + f.num(res.cf.rows[i].wcBalance) + '</td>' +
     '<td class="n ' + (m.dscr[i].value !== null && m.dscr[i].value < 1.2 ? 'neg' : '') + '">' +
@@ -763,6 +765,14 @@ MTF.renderFin = function (res) {
     field('Ставка вознаграждения', 'finance.rate', '%') +
     field('Срок займа', 'finance.termYears', 'лет') +
     field('Льготный период', 'finance.graceYears', 'лет') +
+    (MTF.isFeedlot && MTF.isFeedlot(P) ? '' :
+      '<div class="f wide"><label>Проценты льготного периода</label><select data-p="finance.graceInterest">' +
+      [['pay', 'Платятся'], ['capitalize', 'Прибавляются к долгу']].map(o =>
+        '<option value="' + o[0] + '"' + (o[0] === (P.finance.graceInterest === 'capitalize' ? 'capitalize' : 'pay') ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+      '</select></div>' +
+      '<div class="hint" style="margin-top:0">«Прибавляются к долгу»: в льготные годы платежей нет, проценты растут вместе с остатком, ' +
+      'после льготы основной долг делится на оставшиеся годы. Проценты считаются на весь заём с 1-го года, как и при обычном графике, ' +
+      'поэтапная выборка по графику капзатрат не учитывается.</div>') +
     field('Финансирование стройки', 'finance.financeShareBuild', '%') +
     field('Финансирование оборудования', 'finance.financeShareEquip', '%') +
     field('Финансирование поголовья', 'finance.financeShareHerd', '%') +
@@ -791,7 +801,7 @@ MTF.renderFin = function (res) {
     '</tbody></table></div></div></div>' +
 
     '<div class="card" style="margin-top:14px"><h3>График погашения</h3><div class="tw"><table>' +
-    '<thead><tr><th>Год</th><th>Остаток на начало</th><th>Проценты</th><th>Основной долг</th>' +
+    '<thead><tr><th>Год</th><th>Остаток на начало</th><th>Проценты</th>' + (capOn ? '<th>в т.ч. в долг</th>' : '') + '<th>Основной долг</th>' +
     '<th>Платёж</th><th>Остаток на конец</th><th>Оборотный</th><th>DSCR</th></tr></thead><tbody>' +
     debtRows + '</tbody></table></div></div>' +
 

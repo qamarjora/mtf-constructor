@@ -157,5 +157,48 @@ console.log('4. База «% от выручки» для прочих расх�
   ok(care0.count > 0 && care1.count === care0.count && near(care1.perCow, care0.perCow, 1e-9), 'обслуживание стада на корову эту статью не учитывает');
 }
 
+console.log('5. Проценты льготного периода (finance.graceInterest)');
+{
+  const r0 = run(project());
+  const F = r0.funding, L = F.loanTotal, rate = F.effectiveRate / 100, fin = r0.pnl.length;
+  ok(M.graceCapitalized(project().params) === false && project().params.finance.graceInterest === undefined, 'по умолчанию проценты платятся, поле не пишется');
+  ok(r0.debt.every(d => d.capitalized === undefined), 'в обычном графике строки без нового поля');
+  ok(near(r0.debt[0].payment, L * rate) && near(r0.debt[2].principal, L / 10), 'обычный график: льгота 2 года, дальше тело по L/10');
+
+  const cap = run(project(s => { s.params.finance.graceInterest = 'capitalize'; })), D = cap.debt;
+  ok(D[0].payment === 0 && D[1].payment === 0 && D[0].principal === 0 && D[1].principal === 0, 'в льготные годы платежей нет');
+  ok(near(D[0].capitalized, L * rate) && near(D[1].capitalized, L * (1 + rate) * rate), 'проценты льготы прибавляются к долгу');
+  ok(near(D[1].closing, L * Math.pow(1 + rate, 2), 1e-6), 'долг к концу льготы = заём × (1 + ставка)^льгота (' + Math.round(D[1].closing) + ')');
+  ok(near(D[2].principal, D[1].closing / 10) && near(D[2].interest, D[1].closing * rate), 'после льготы тело = остаток / оставшиеся годы, проценты на растущий остаток');
+  ok(D.slice(2).every((d, i) => i === 0 || near(d.principal, D[2].principal)), 'тело равными частями');
+  ok(near(D[D.length - 1].closing, 0, 1e-6), 'при сроке не больше горизонта долг погашен');
+  const totPay = D.reduce((a, d) => a + d.payment, 0), totInt = D.reduce((a, d) => a + d.interest, 0);
+  ok(near(totPay, L + totInt, 1e-6), 'всего платежей = заём + все проценты (включая капитализированные)');
+  ok(cap.cf.rows[0].debtService === 0 && cap.cf.rows[1].debtService === 0, 'в денежном потоке обслуживание долга в льготу нулевое');
+  ok(cap.metrics.dscr[0].value === null && cap.metrics.dscr[1].value === null && cap.metrics.dscr[2].value !== null, 'DSCR в льготные годы не считается (нет платежа)');
+  ok(Number.isFinite(cap.metrics.minDscr) && Number.isFinite(cap.metrics.minDscrY2), 'минимумы DSCR берутся по годам с платежом');
+  ok(cap.metrics.npv === r0.metrics.npv && cap.metrics.irr === r0.metrics.irr, 'NPV и IRR проекта от графика не зависят');
+  ok(strip(cap.funding) === strip(r0.funding), 'структура финансирования та же');
+  ok(cap.metrics.dscr[2].value < r0.metrics.dscr[2].value, 'платёж после льготы выше, DSCR 2029 г. ниже, чем при уплате процентов');
+
+  const g0 = run(project(s => { s.params.finance.graceYears = 0; s.params.finance.graceInterest = 'capitalize'; }));
+  const g00 = run(project(s => { s.params.finance.graceYears = 0; }));
+  ok(strip(g0.debt) === strip(g00.debt) && strip(g0.cf) === strip(g00.cf), 'льгота 0 лет: capitalize ничего не меняет');
+  const t15 = run(project(s => { s.params.finance.termYears = 15; s.params.finance.graceInterest = 'capitalize'; })).debt;
+  ok(t15[t15.length - 1].closing > 0 && near(t15[2].principal, t15[1].closing / 13), 'срок больше горизонта: тело делится на срок минус льгота, остаток на конец горизонта не гасится');
+
+  const fl = project(s => { s.params.project.type = 'feedlot'; s.params.finance.graceInterest = 'capitalize'; });
+  ok(M.graceCapitalized(fl.params) === false, 'откорм: поле не действует');
+
+  const h = M.renderFin(project(s => { }) && run(M.state));
+  ok(h.indexOf('data-p="finance.graceInterest"') >= 0 && /<option value="pay" selected>/.test(h), 'в параметрах финансирования выбор есть, по умолчанию «Платятся»');
+  ok(h.indexOf('в т.ч. в долг') < 0, 'по умолчанию колонки «в т.ч. в долг» нет');
+  const stC = project(s => { s.params.finance.graceInterest = 'capitalize'; }), hc = M.renderFin(run(stC));
+  ok(/<option value="capitalize" selected>/.test(hc) && hc.indexOf('в т.ч. в долг') >= 0, 'при capitalize выбор сохранён, в таблице колонка «в т.ч. в долг»');
+  const dOn = docOf(project(s => { s.params.finance.graceInterest = 'capitalize'; }), 'bizplan');
+  ok(dOn.indexOf('в т.ч. в долг') >= 0 && dOn.indexOf('прибавляются к долгу') >= 0, 'документ: колонка и пояснение при capitalize');
+  ok(docOf(project(), 'bizplan').indexOf('в т.ч. в долг') < 0, 'документ по умолчанию без них');
+}
+
 console.log(fails ? '\nОШИБОК: ' + fails : '\nвсе проверки пройдены');
 process.exit(fails ? 1 : 0);
