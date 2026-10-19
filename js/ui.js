@@ -575,6 +575,14 @@ MTF.renderEcon = function (res) {
     '<div class="grid g2" style="margin-top:14px">' +
     '<div class="card"><h3>Оплата труда</h3>' +
     field('Режим', 'staff.mode', '', 'select', [['detailed', 'Штатное расписание'], ['lump', 'Одной суммой']]) +
+    (MTF.isFeedlot && MTF.isFeedlot(P) ? '' :
+      '<div class="f wide"><label>Кто платит штат</label><select data-p="staff.payer">' +
+      [['farm', 'Ферма: весь ФОТ'], ['farm_only', 'Ферма: только блок фермы'], ['operator', 'Оператор: весь ФОТ вне фермы']].map(o =>
+        '<option value="' + o[0] + '"' + (o[0] === MTF.staffPayer(P) ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+      '</select></div>' +
+      '<div class="hint" style="margin-top:0">Меняет только то, на чьей стороне ФОТ. «Только блок фермы»: АУП комплекса и земельный фонд на ферму не ложатся. ' +
+      '«Оператор»: весь штат вне экономики фермы, EBITDA, DSCR, NPV и IRR фермы считаются без него и с вариантом «на ферме» не сопоставимы. ' +
+      'Для режима «Оператор» вознаграждение нужно задавать в % от выручки.</div>') +
     staffBlock + '</div>' +
 
     '<div class="card"><h3>Прочие операционные расходы</h3><div class="tw"><table>' +
@@ -727,7 +735,7 @@ MTF.renderFin = function (res) {
     kpi('Стоимость проекта', f.num(res.capex.total), 'тыс. ₸') +
     kpi('Собственное участие', f.num(fd.equity), f.pct(fd.equityShare, 0)) +
     kpi('Лимит займа', f.num(fd.loanTotal), f.pct(fd.loanShare, 0)) +
-    kpi('NPV', f.num(m.npv), 'при ставке ' + P.finance.wacc + '%', m.npv > 0 ? 'good' : 'bad') +
+    kpi('NPV', f.num(m.npv), 'при ставке ' + P.finance.wacc + '%' + (MTF.staffPayer(P) !== 'farm' ? ' · без ФОТ, не сопоставимо' : ''), m.npv > 0 ? 'good' : 'bad') +
     kpi('IRR проекта', m.irr !== null ? f.pct(m.irr * 100) : '—', '',
       m.irr !== null && m.irr * 100 > P.finance.wacc ? 'good' : 'bad') +
     kpi('Окупаемость', m.payback ? m.payback.toFixed(1) : '—', 'лет') +

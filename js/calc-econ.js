@@ -124,6 +124,38 @@ MTF.calcPayroll = function (p, staff, cows) {
   return { net: net, gross: gross, headcount: Math.round(hc), blocks: blocks, farms: N };
 };
 
+/* Кто платит штатное расписание (staff.payer): 'farm' — весь ФОТ на ферме (как всегда),
+   'farm_only' — на ферме только блок фермы, АУП комплекса и земельный фонд в экономику фермы не входят,
+   'operator' — весь ФОТ вне экономики фермы (платит оператор). Поле производное: у проекта без него и у откорма
+   считается 'farm', в проект ничего не записывается. */
+MTF.staffPayer = function (p) {
+  if (p && p.project && p.project.type === 'feedlot') return 'farm';
+  const v = p && p.staff && p.staff.payer;
+  return (v === 'farm_only' || v === 'operator') ? v : 'farm';
+};
+
+/* ФОТ с начислениями на одну ферму, который ложится на ферму; pr — результат MTF.calcPayroll.
+   Режим «одной суммой» (blocks пуст) на блоки не делится: при farm_only остаётся на ферме. */
+MTF.payrollOnFarm = function (p, pr) {
+  const mode = MTF.staffPayer(p);
+  if (mode === 'operator') return 0;
+  if (mode === 'farm_only' && pr.blocks && pr.blocks.length) {
+    return pr.blocks.filter(b => b.id === 'farm').reduce((a, b) => a + b.gross, 0);
+  }
+  return pr.gross;
+};
+
+/* ФОТ на одну ферму, который платит оператор: при operator весь, при farm_only только доля АУП комплекса
+   (земельный фонд при farm_only не считается нигде), при farm ноль. */
+MTF.payrollOnOperator = function (p, pr) {
+  const mode = MTF.staffPayer(p);
+  if (mode === 'operator') return pr.gross;
+  if (mode === 'farm_only' && pr.blocks && pr.blocks.length) {
+    return pr.blocks.filter(b => b.id === 'complex').reduce((a, b) => a + b.gross, 0);
+  }
+  return 0;
+};
+
 /* ---------- Корма ---------- */
 
 /* Режим contractor: подрядчик заготавливает корма на арендной земле и продаёт ферме по фиксированной цене.
@@ -190,7 +222,7 @@ MTF.calcOpex = function (p, herdYears, staff, opexItems) {
     detail['Корма'] = feed.indexed ? feed.sum : feed.sum * k;
 
     const pr = MTF.calcPayroll(p, staff, y.cows);
-    detail['Фонд оплаты труда'] = pr.gross * k;
+    detail['Фонд оплаты труда'] = MTF.payrollOnFarm(p, pr) * k;
 
     opexItems.forEach(it => {
       let v = 0;

@@ -237,6 +237,17 @@ MTF.runModel = function (state) {
   if (Math.abs(spreadSum - 100) > 0.5) {
     checks.push('Распределение капзатрат по годам даёт ' + spreadSum + '% вместо 100%.');
   }
+  const payer = MTF.staffPayer(p);
+  if (payer !== 'farm') {
+    checks.push((payer === 'operator'
+      ? 'ФОТ вынесен из экономики фермы (платит оператор).'
+      : 'На ферме учтён только блок фермы, АУП комплекса и земельный фонд в экономику фермы не входят.') +
+      ' EBITDA, DSCR, NPV и IRR фермы без этого ФОТ: с вариантом «на ферме» не сопоставимы.');
+  }
+  if (payer === 'operator' && p.finance.operatorFeeMode !== 'revenue') {
+    checks.push('Режим «ФОТ платит оператор» рассчитан для вознаграждения «% от выручки». При другой базе вознаграждение ' +
+      'зависит от EBITDA фермы, а она при этом режиме меняется: результат оператора недостоверен.');
+  }
   const feedMode = p.feed && p.feed.mode;
   if (feedMode && ['purchase', 'own', 'lump', 'contractor'].indexOf(feedMode) < 0) {
     checks.push('Неизвестный режим кормов, использованы нормы.');

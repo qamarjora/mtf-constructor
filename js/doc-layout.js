@@ -283,6 +283,12 @@
     // выводы по ликвидности отдельной строкой; на вкладке «Финансирование» они уже показаны своими заметками
     if (res.liquidity && res.liquidity.length) t.riskSensTable += '\n<p>' + res.liquidity.join(' ') + '</p>';
 
+    // ФОТ вынесен из экономики фермы: показатели без него, как итог их показывать нельзя
+    if (MTF.staffPayer(p) !== 'farm') {
+      const warn = '\n<p><i><b>Без ФОТ, не сопоставимо.</b> Часть штатного расписания не входит в затраты фермы, показатели EBITDA, DSCR, NPV и IRR рассчитаны без неё и с расчётом «ФОТ на ферме» не сопоставимы. Предварительный расчёт.</i></p>';
+      ['summaryTable', 'metricsTable', 'consolidatedTable'].forEach(function (k) { if (t[k]) t[k] += warn; });
+    }
+
     // блоки, которые подмешиваются только в инвестиционный вид
     t.estimateTotalBlock = inv ? '' : '**Стоимость проекта в целом**\n\n' + (t.estimateTotalTable || '');
     t.prepShortNote = prepIn
