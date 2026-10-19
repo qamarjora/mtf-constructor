@@ -238,5 +238,56 @@ console.log('6. Результат оператора');
     ok(docOf(project(s => { s.params.staff.payer = 'operator'; }), mode).indexOf('Результат оператора') < 0, 'документ «' + mode + '»: результата оператора нет'));
 }
 
+console.log('7. Сравнение вариантов');
+{
+  const yr = a => a.map((v, i) => ({ year: 2027 + i, value: v }));
+  ok(M.dscrSustainedYear(yr([3, 2, 0.5, 1.3, 1.1, 2, 3]), 1.2) === 2032, 'год, с которого DSCR ≥ 1,2 и дальше не ниже: после последней просадки');
+  ok(M.dscrSustainedYear(yr([3, 2, 1.3, 1.4]), 1.2) === 2027, 'если ниже порога не было, это первый год');
+  ok(M.dscrSustainedYear(yr([3, 2, 1.3, 1.1]), 1.2) === null, 'если последний год ниже порога, года нет');
+  ok(M.dscrSustainedYear(yr([3, 1.2, 1.2]), 1.2) === 2027, 'ровно 1,2 порог не нарушает');
+  ok(M.dscrSustainedYear(yr([null, null, 0.8, 1.5, 2]), 1.2) === 2030 && M.dscrSustainedYear(yr([null, null, 1.5, 2]), 1.2) === 2027, 'годы без платежа порог не нарушают');
+  const mn = M.dscrMinFromSecond(yr([0.1, 2, null, 1.5, 3]));
+  ok(mn.year === 2030 && mn.value === 1.5, 'минимум со 2-го года: первый год и годы без платежа не считаются');
+
+  const st = project(), res = run(st), snap = JSON.stringify(st);
+  const stT = c(st); stT.params.prices.milk += 1;
+  const t0 = Date.now(); M.compareVariants(stT); const dt = Date.now() - t0;
+  const rows = M.compareVariants(st);
+  ok(rows.length === 9 && rows.map(r => r.payer + r.share).join() === 'farm3,farm15,farm30,farm_only3,farm_only15,farm_only30,operator3,operator15,operator30', '9 строк: 3 вида платящего × доли 3, 15, 30');
+  ok(JSON.stringify(st) === snap && M.state === st, 'проект и состояние не изменились');
+  ok(M.compareVariants(st) === rows, 'повторный вызов на том же состоянии берёт готовый результат');
+  const st2 = c(st); st2.params.finance.rate += 1;
+  ok(M.compareVariants(st2) !== rows, 'при изменении проекта пересчитывается');
+  ok(dt < 3000, 'считается быстро (' + dt + ' мс)');
+
+  const direct = run(project(s => { s.params.staff.payer = 'operator'; s.params.finance.operatorFeeMode = 'revenue'; s.params.finance.operatorFeeValue = 15; }));
+  const r = rows.find(x => x.payer === 'operator' && x.share === 15);
+  ok(near(r.npv, direct.metrics.npv, 1e-6) && near(r.min2, direct.metrics.minDscrY2, 1e-9) && near(r.dscr[2], direct.metrics.dscr[2].value, 1e-9),
+    'строка совпадает с прямым пересчётом проекта с теми же настройками');
+  const base = rows.find(x => x.payer === 'farm' && x.share === 3);
+  ok(near(base.npv, res.metrics.npv, 1e-6) && near(base.min2, res.metrics.minDscrY2, 1e-9), 'строка «ферма, 3%» совпадает с проектом по умолчанию');
+  const f3 = rows.filter(x => x.payer === 'farm');
+  ok(f3[0].dscr[2] > f3[1].dscr[2] && f3[1].dscr[2] > f3[2].dscr[2], 'чем выше доля оператора, тем ниже DSCR фермы');
+  ok(f3[0].operatorResult < f3[1].operatorResult && f3[1].operatorResult < f3[2].operatorResult, 'и тем выше результат оператора');
+  const ops = rows.filter(x => x.payer === 'operator');
+  ok(ops[0].dscr[2] > f3[0].dscr[2] && ops[0].npv > f3[0].npv, 'если ФОТ платит оператор, ферме легче');
+  ok(ops[0].operatorResult < 0 && rows.filter(x => x.payer === 'farm').every(x => x.operatorResult > 0), 'при 3% оператор, который платит весь штат, в минусе');
+  ok(rows.every(x => x.years[0] === 2027 && x.dscr.length === res.pnl.length), 'годы и DSCR по всем годам горизонта');
+
+  const cap = project(s => { s.params.finance.graceInterest = 'capitalize'; });
+  const rc = M.compareVariants(cap);
+  ok(rc.every(x => x.dscr[0] === null) && rc[0].dscr[1] === null && rc[6].dscr[1] === null, 'проценты льготы из проекта учтены: в льготные годы DSCR нет (кроме строк, где оборотный кредит даёт проценты)');
+
+  const h = M.renderFin(run(st));
+  ok(h.indexOf('<h3>Сравнение вариантов</h3>') >= 0 && h.indexOf('<h3>Результат оператора</h3>') < h.indexOf('<h3>Сравнение вариантов</h3>') &&
+     h.indexOf('<h3>Сравнение вариантов</h3>') < h.indexOf('<h3>График погашения</h3>'), 'на вкладке: после «Результата оператора», до графика погашения');
+  ok(h.indexOf('<th>DSCR 2028</th>') >= 0 && h.indexOf('<th>DSCR 2031</th>') >= 0 && h.indexOf('DSCR ≥ 1,2 с года и дальше') >= 0, 'столбцы DSCR 2028…2031 и «DSCR ≥ 1,2 с года и дальше»');
+  ok(count(h.slice(h.indexOf('<h3>Сравнение вариантов</h3>'), h.indexOf('<h3>График погашения</h3>')), ' *</td>') === 12, 'NPV и IRR шести строк без ФОТ помечены звёздочкой');
+  const fl = project(s => { s.params.project.type = 'feedlot'; });
+  let hf; try { hf = M.renderFin(run(fl)); } catch (e) { hf = 'ERR'; }
+  ok(hf.indexOf('Сравнение вариантов') < 0, 'для откорма таблицы нет');
+  ok(docOf(project(), 'bizplan').indexOf('Сравнение вариантов') < 0, 'в документы таблица не выносится');
+}
+
 console.log(fails ? '\nОШИБОК: ' + fails : '\nвсе проверки пройдены');
 process.exit(fails ? 1 : 0);
