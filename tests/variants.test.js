@@ -127,5 +127,35 @@ console.log('3. Интерфейс');
   ok(M.renderFin(run(project())).indexOf('не сопоставимо') < 0, 'по умолчанию пометки нет');
 }
 
+console.log('4. База «% от выручки» для прочих расходов');
+{
+  const tax = v => ({ id: 'o_tax', name: 'Налоги и медикаменты', base: 'revenue', value: v });
+  ok(!M.opexItems.some(it => it.base === 'revenue') && !project().opexItems.some(it => it.base === 'revenue'), 'по умолчанию такой статьи нет');
+  const r0 = run(project());
+  const st = project(s => { s.opexItems.push(tax(10)); }), r1 = run(st);
+  ok(r1.pnl.every((y, i) => near(y.opexDetail['Налоги и медикаменты'], 0.1 * y.revenue, 1e-6)), 'статья = 10% выручки каждого года');
+  ok(r1.pnl.every((y, i) => near(r0.pnl[i].ebitda - y.ebitda, 0.1 * y.revenue, 1e-6)), 'EBITDA ниже ровно на эту сумму (вознаграждение от выручки не меняется)');
+  ok(r1.pnl.every((y, i) => near(y.opex - r0.pnl[i].opex, 0.1 * y.revenue, 1e-6)), 'остальные статьи не изменились');
+  const infl = Math.pow(1 + st.params.prices.costInflation / 100, 3);
+  ok(!near(r1.pnl[3].opexDetail['Налоги и медикаменты'], 0.1 * r0.pnl[3].revenue * infl, 1), 'рост затрат к статье не применяется');
+  const r2 = run(project(s => { s.opexItems.push(tax(0)); }));
+  ok(strip(r2.pnl) === strip(r0.pnl), 'ставка 0 даёт расчёт без статьи');
+  const sAll = project(s => { s.params.prices.revenueScope = 'all'; s.opexItems.push(tax(10)); }), rA = run(sAll);
+  ok(rA.pnl.every(y => near(y.opexDetail['Налоги и медикаменты'], 0.1 * y.revenue, 1e-6)) && rA.pnl[4].revenue > rA.herd[4].milkLiters * sAll.params.prices.milk * Math.pow(1.06, 4) / 1000 + 1,
+    'при полной выручке база = вся выручка (rev.total), как у вознаграждения оператора');
+  const rNoSub = run(project(s => { s.opexItems.push(tax(10)); s.subsidies.forEach(x => { x.enabled = false; }); }));
+  ok(rNoSub.pnl.every((y, i) => near(y.opexDetail['Налоги и медикаменты'], r1.pnl[i].opexDetail['Налоги и медикаменты'], 1e-9)), 'субсидии в базу не входят');
+  const fee = run(project(s => { s.opexItems.push(tax(10)); s.params.finance.operatorFeeMode = 'ebitda'; s.params.finance.operatorFeeValue = 10; }));
+  ok(fee.pnl.every(y => y.operatorFee >= 0), 'работает и при вознаграждении от EBITDA (выручку статья не меняет)');
+  const h = M.renderEcon(r1);
+  ok(h.indexOf('<option value="revenue"') >= 0 && /<option value="revenue" selected>% от выручки/.test(h), 'в списке баз есть «% от выручки», у статьи выбрана');
+  ok(count(h, '<option value="revenue"') === st.opexItems.length && count(h, '<option value="milk"') === st.opexItems.length, 'пункт «% от выручки» добавлен в список базы каждой статьи, остальные пункты на месте');
+  const stf = project(s => { s.params.project.type = 'feedlot'; });
+  let hf; try { hf = M.renderEcon(run(stf)); } catch (e) { hf = 'ERR'; }
+  ok(hf.indexOf('<option value="revenue"') < 0, 'для откорма пункта нет');
+  const care0 = M.careCostPerCow(project().params, r0, project().opexItems), care1 = M.careCostPerCow(st.params, r1, st.opexItems);
+  ok(care0.count > 0 && care1.count === care0.count && near(care1.perCow, care0.perCow, 1e-9), 'обслуживание стада на корову эту статью не учитывает');
+}
+
 console.log(fails ? '\nОШИБОК: ' + fails : '\nвсе проверки пройдены');
 process.exit(fails ? 1 : 0);

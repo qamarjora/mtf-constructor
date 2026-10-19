@@ -566,7 +566,8 @@ MTF.renderEcon = function (res) {
   const opexRows = MTF.state.opexItems.map((it, i) =>
     '<tr><td><input type="text" data-oxn="' + i + '" value="' + it.name + '" style="width:100%;text-align:left;font-family:var(--sans)"></td>' +
     '<td><select data-oxb="' + i + '">' +
-      [['head', 'На голову'], ['cow', 'На корову'], ['young', 'На молодняк'], ['sum', 'Сумма'], ['milk', 'На литр']].map(b =>
+      [['head', 'На голову'], ['cow', 'На корову'], ['young', 'На молодняк'], ['sum', 'Сумма'], ['milk', 'На литр']]
+        .concat(MTF.isFeedlot && MTF.isFeedlot(P) ? [] : [['revenue', '% от выручки']]).map(b =>
       '<option value="' + b[0] + '"' + (b[0] === it.base ? ' selected' : '') + '>' + b[1] + '</option>').join('') + '</select></td>' +
     '<td><input type="number" data-oxv="' + i + '" value="' + it.value + '" step="any" style="width:82px"></td>' +
     '<td><button class="del" data-oxdel="' + i + '">×</button></td></tr>').join('');
@@ -598,7 +599,9 @@ MTF.renderEcon = function (res) {
         : '<div class="note warn" style="margin-top:10px">Статей обслуживания стада нет. Кнопка добавит ветпрепараты, ' +
           'диагностику, семя и осеменение, уход за копытами и анализы.</div>';
     })()) +
-    '<div class="hint">Ставки обслуживания стада заведены как ориентир и подлежат уточнению у зоотехника и ветеринара.</div></div>' +
+    '<div class="hint">Ставки обслуживания стада заведены как ориентир и подлежат уточнению у зоотехника и ветеринара.</div>' +
+    (MTF.isFeedlot && MTF.isFeedlot(P) ? '' : '<div class="hint">База «% от выручки»: ставка в процентах от выручки года (как база вознаграждения оператора, без субсидий), ' +
+      'в ценах года, без роста затрат. Например, 10 означает 10% выручки.</div>') + '</div>' +
     '</div>' +
 
     '<div class="card" style="margin-top:14px"><h3>Прогноз финансовых показателей</h3><div class="tw"><table>' +

@@ -210,8 +210,12 @@ MTF.calcFeed = function (p, y, i, herdYears) {
 };
 
 /* ---------- Операционные расходы ---------- */
-MTF.calcOpex = function (p, herdYears, staff, opexItems) {
+MTF.calcOpex = function (p, herdYears, staff, opexItems, rev) {
   const inf = 1 + p.prices.costInflation / 100;
+  /* База «% от выручки» (revenue): доля выручки года, как у вознаграждения оператора (rev.total, без субсидий).
+     Выручка уже в ценах года, поэтому рост затрат к такой статье не применяется. Выручка берётся готовая
+     из calcPnL либо считается здесь, и только если в списке есть такая статья. */
+  const revs = opexItems.some(it => it.base === 'revenue') ? (rev || MTF.calcRevenue(p, herdYears)) : null;
 
   return herdYears.map((y, i) => {
     const k = Math.pow(inf, i);
@@ -226,6 +230,11 @@ MTF.calcOpex = function (p, herdYears, staff, opexItems) {
 
     opexItems.forEach(it => {
       let v = 0;
+      if (it.base === 'revenue') {
+        const vr = it.value * revs[i].total / 100;
+        if (vr > 0) detail[it.name] = vr;
+        return;
+      }
       if (it.base === 'head') v = it.value * y.total;
       else if (it.base === 'cow') v = it.value * y.cows;
       else if (it.base === 'young') v = it.value * (y.heifers + y.calves + y.bulls);
@@ -323,7 +332,7 @@ MTF.calcOperatorFee = function (p, revenue, ebitdaBefore) {
 /* ---------- P&L ---------- */
 MTF.calcPnL = function (p, herdYears, capex, staff, opexItems, subsidies) {
   const rev = MTF.calcRevenue(p, herdYears);
-  const opex = MTF.calcOpex(p, herdYears, staff, opexItems);
+  const opex = MTF.calcOpex(p, herdYears, staff, opexItems, rev);
   const sub = MTF.calcSubsidies(p, herdYears, capex, subsidies);
 
   const before = rev.map((r, i) => r.total + sub[i].total - opex[i].total);
